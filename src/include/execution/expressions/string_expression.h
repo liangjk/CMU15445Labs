@@ -41,13 +41,18 @@ class StringExpression : public AbstractExpression {
       : AbstractExpression({std::move(arg)}, Column{"<val>", TypeId::VARCHAR, 256 /* hardcode max length */}),
         expr_type_{expr_type} {
     if (GetChildAt(0)->GetReturnType().GetType() != TypeId::VARCHAR) {
+      throw Exception(fmt::format("only support VARCHAR as arg"));
       BUSTUB_ENSURE(GetChildAt(0)->GetReturnType().GetType() == TypeId::VARCHAR, "unexpected arg");
     }
   }
 
   auto Compute(const std::string &val) const -> std::string {
     // TODO(student): implement upper / lower.
-    return {};
+    std::string ret = val;
+    int (*func)(int) = &std::toupper;
+    if (expr_type_ == StringExpressionType::Lower) func = &std::tolower;
+    for (char &c : ret) c = func(c);
+    return ret;
   }
 
   auto Evaluate(const Tuple *tuple, const Schema &schema) const -> Value override {
