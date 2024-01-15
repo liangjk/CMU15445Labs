@@ -31,14 +31,16 @@ auto Planner::GetFuncCallFromFactory(const std::string &func_name, std::vector<A
   // 3. return a `StringExpression` std::shared_ptr.
   bool valid = false;
   auto type = StringExpressionType::Lower;
-  if (func_name == "lower")
+  if (func_name == "lower") {
     valid = true;
-  else if (func_name == "upper") {
+  } else if (func_name == "upper") {
     valid = true;
     type = StringExpressionType::Upper;
   }
   if (valid) {
-    if (args.size() == 1) return std::make_shared<StringExpression>(std::move(args[0]), type);
+    if (args.size() == 1) {
+      return std::make_shared<StringExpression>(std::move(args[0]), type);
+    }
     throw Exception(fmt::format("unsupported string_call {} with {} args", func_name, args.size()));
   }
   throw Exception(fmt::format("func call {} not supported in planner yet", func_name));

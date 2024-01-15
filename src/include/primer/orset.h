@@ -62,21 +62,21 @@ class ORSet {
 
  private:
   // TODO(student): Add your private memeber variables to represent ORSet.
-  struct elePair {
-    T element;
-    uid_t id;
+  struct ElePair {
+    T element_;
+    uid_t id_;
 
-    elePair(T elem, uid_t uid) : element(elem), id(uid) {}
-    bool operator==(const elePair &other) const { return element == other.element && id == other.id; }
+    ElePair(T elem, uid_t id) : element_(std::move(elem)), id_(id) {}
+    auto operator==(const ElePair &other) const -> bool { return element_ == other.element_ && id_ == other.id_; }
 
     struct Hash {
-      std::size_t operator()(const elePair &pair) const {
-        return std::hash<T>()(pair.element) ^ (std::hash<uid_t>()(pair.id) << 1);
+      auto operator()(const ElePair &pair) const -> std::size_t {
+        return std::hash<T>()(pair.element_) ^ (std::hash<uid_t>()(pair.id_) << 1);
       }
     };
   };
-  std::unordered_set<elePair, typename elePair::Hash> live;
-  std::unordered_set<elePair, typename elePair::Hash> tomb;
+  std::unordered_set<ElePair, typename ElePair::Hash> live_;
+  std::unordered_set<ElePair, typename ElePair::Hash> tomb_;
 };
 
 }  // namespace bustub

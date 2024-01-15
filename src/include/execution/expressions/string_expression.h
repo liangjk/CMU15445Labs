@@ -50,8 +50,12 @@ class StringExpression : public AbstractExpression {
     // TODO(student): implement upper / lower.
     std::string ret = val;
     int (*func)(int) = &std::toupper;
-    if (expr_type_ == StringExpressionType::Lower) func = &std::tolower;
-    for (char &c : ret) c = func(c);
+    if (expr_type_ == StringExpressionType::Lower) {
+      func = &std::tolower;
+    }
+    for (char &c : ret) {
+      c = func(c);
+    }
     return ret;
   }
 
