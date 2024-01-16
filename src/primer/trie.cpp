@@ -38,7 +38,7 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
   // You should walk through the trie and create new nodes if necessary. If the node corresponding to the key already
   // exists, you should create a new `TrieNodeWithValue`.
   std::shared_ptr<TrieNode> newroot;
-  if (key.size() == 0) {
+  if (key.empty()) {
     if (root_ == nullptr) {
       newroot = std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
     } else {
@@ -49,7 +49,7 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
   if (root_ == nullptr) {
     newroot = std::make_shared<TrieNode>();
   } else {
-    newroot = std::shared_ptr<TrieNode>(std::move(root_->Clone()));
+    newroot = std::shared_ptr<TrieNode>(root_->Clone());
   }
   auto node = newroot;
   for (auto strit = key.begin();; ++strit) {
@@ -57,7 +57,7 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
     if (strit + 1 != key.end()) {
       std::shared_ptr<TrieNode> newnode;
       if (it != node->children_.end()) {
-        newnode = std::shared_ptr<TrieNode>(std::move(it->second->Clone()));
+        newnode = std::shared_ptr<TrieNode>(it->second->Clone());
       } else {
         newnode = std::make_shared<TrieNode>();
       }
@@ -82,19 +82,18 @@ void Trie::RemoveNode(std::shared_ptr<TrieNode> &node, std::string_view::iterato
     return;
   }
   if (strit == strend) {
-    if (node->children_.size() == 0) {
+    if (node->children_.empty()) {
       node = nullptr;
       return;
-    } else {
+    }
       node = std::make_shared<TrieNode>(node->children_);
       return;
-    }
   }
   auto it = node->children_.find(*strit);
   if (it == node->children_.end()) {
     return;
   }
-  auto newnode = std::shared_ptr<TrieNode>(std::move(it->second->Clone()));
+  auto newnode = std::shared_ptr<TrieNode>(it->second->Clone());
   RemoveNode(newnode, strit + 1, strend);
   if (newnode == nullptr) {
     if (!node->is_value_node_ && node->children_.size() <= 1) {
@@ -105,7 +104,6 @@ void Trie::RemoveNode(std::shared_ptr<TrieNode> &node, std::string_view::iterato
   } else {
     it->second = newnode;
   }
-  return;
 }
 
 auto Trie::Remove(std::string_view key) const -> Trie {
@@ -116,7 +114,7 @@ auto Trie::Remove(std::string_view key) const -> Trie {
   if (root_ == nullptr) {
     return Trie(nullptr);
   }
-  auto newroot = std::shared_ptr<TrieNode>(std::move(root_->Clone()));
+  auto newroot = std::shared_ptr<TrieNode>(root_->Clone());
   RemoveNode(newroot, key.begin(), key.end());
   return Trie(newroot);
 }

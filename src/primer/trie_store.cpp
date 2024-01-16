@@ -36,7 +36,6 @@ void TrieStore::Put(std::string_view key, T value) {
     std::lock_guard<std::mutex> rlock(root_lock_);
     root_ = root;
   }
-  return;
 }
 
 void TrieStore::Remove(std::string_view key) {
@@ -50,7 +49,6 @@ void TrieStore::Remove(std::string_view key) {
     std::lock_guard<std::mutex> rlock(root_lock_);
     root_ = root;
   }
-  return;
 }
 
 // Below are explicit instantiation of template functions.
