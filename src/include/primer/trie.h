@@ -109,6 +109,9 @@ class Trie {
   // Create a new trie with the given root.
   explicit Trie(std::shared_ptr<const TrieNode> root) : root_(std::move(root)) {}
 
+  static void RemoveNode(std::shared_ptr<TrieNode> &node, std::string_view::iterator strit,
+                         const std::string_view::iterator &strend);
+
  public:
   // Create an empty trie.
   Trie() = default;
