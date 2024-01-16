@@ -86,8 +86,8 @@ void Trie::RemoveNode(std::shared_ptr<TrieNode> &node, std::string_view::iterato
       node = nullptr;
       return;
     }
-      node = std::make_shared<TrieNode>(node->children_);
-      return;
+    node = std::make_shared<TrieNode>(node->children_);
+    return;
   }
   auto it = node->children_.find(*strit);
   if (it == node->children_.end()) {
