@@ -32,7 +32,12 @@ void LRUKNode::Access(size_t time) {
 auto LRUKNode::Compare(bool &inf, size_t &time) -> bool {
   latch_.lock();
   size_t size = history_.size();
-  size_t lra = history_.front();
+  size_t lra;
+  if (size >= k_) {
+    lra = history_.front();
+  } else {
+    lra = history_.back();
+  }
   latch_.unlock();
   if (inf) {
     if (size >= k_) {
@@ -59,6 +64,12 @@ auto LRUKNode::Compare(bool &inf, size_t &time) -> bool {
 LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : k_(k) {
   node_store_.reserve(num_frames);
   evictable_.reserve(num_frames);
+}
+
+LRUKReplacer::~LRUKReplacer() {
+  for (auto pair : node_store_) {
+    delete (pair.second);
+  }
 }
 
 auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
@@ -90,6 +101,8 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
   if (node == nullptr) {
     node = new LRUKNode(k_, frame_id, false, time);
     node_store_[frame_id] = node;
+    latch_.unlock();
+    return;
   }
   latch_.unlock();
   node->Access(time);
@@ -99,9 +112,6 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
   latch_.lock();
   LRUKNode *node = node_store_[frame_id];
   if (node == nullptr) {
-    // node = new LRUKNode(k_, frame_id, set_evictable, current_timestamp_++);
-    // node_store_[frame_id] = node;
-    // if (set_evictable) evictable_.insert(node);
     latch_.unlock();
     return;
   }
