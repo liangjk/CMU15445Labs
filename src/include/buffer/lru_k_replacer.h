@@ -12,10 +12,11 @@
 
 #pragma once
 
+#include <deque>
 #include <limits>
-#include <list>
 #include <mutex>  // NOLINT
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "common/config.h"
@@ -30,10 +31,17 @@ class LRUKNode {
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
-  [[maybe_unused]] std::list<size_t> history_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] frame_id_t fid_;
-  [[maybe_unused]] bool is_evictable_{false};
+  std::mutex latch_;
+  std::deque<size_t> history_;
+  size_t k_;
+  frame_id_t fid_;
+  bool is_evictable_;
+
+  explicit LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time);
+  void access(size_t time);
+  auto compare(bool &inf, size_t &time) -> bool;
+
+  friend class LRUKReplacer;
 };
 
 /**
@@ -150,12 +158,11 @@ class LRUKReplacer {
  private:
   // TODO(student): implement me! You can replace these member variables as you like.
   // Remove maybe_unused if you start using them.
-  [[maybe_unused]] std::unordered_map<frame_id_t, LRUKNode> node_store_;
-  [[maybe_unused]] size_t current_timestamp_{0};
-  [[maybe_unused]] size_t curr_size_{0};
-  [[maybe_unused]] size_t replacer_size_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] std::mutex latch_;
+  std::unordered_map<frame_id_t, LRUKNode *> node_store_;
+  std::unordered_set<LRUKNode *> evictable_;
+  size_t current_timestamp_{0};
+  size_t k_;
+  std::mutex latch_;
 };
 
 }  // namespace bustub
