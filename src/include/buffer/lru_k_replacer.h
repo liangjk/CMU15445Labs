@@ -38,8 +38,8 @@ class LRUKNode {
   bool is_evictable_;
 
   explicit LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time);
-  void access(size_t time);
-  auto compare(bool &inf, size_t &time) -> bool;
+  void Access(size_t time);
+  auto Compare(bool &inf, size_t &time) -> bool;
 
   friend class LRUKReplacer;
 };
