@@ -32,12 +32,7 @@ void LRUKNode::Access(size_t time) {
 auto LRUKNode::Compare(bool &inf, size_t &time) -> bool {
   latch_.lock();
   size_t size = history_.size();
-  size_t lra;
-  if (size >= k_) {
-    lra = history_.front();
-  } else {
-    lra = history_.back();
-  }
+  size_t lra = history_.front();
   latch_.unlock();
   if (inf) {
     if (size >= k_) {
