@@ -15,11 +15,14 @@
 
 namespace bustub {
 
-LRUKNode::LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time)
-    : history_(1, time), k_(k), fid_(fid), is_evictable_(evictable) {}
+LRUKNode::LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time, bool modified)
+    : history_(1, time), k_(k), fid_(fid), is_evictable_(evictable), is_modified_(modified) {}
 
-void LRUKNode::Access(size_t time) {
+void LRUKNode::Access(size_t time, bool modified) {
   latch_.lock();
+  if (!is_modified_ && modified) {
+    is_modified_ = true;
+  }
   if (history_.size() < k_) {
     history_.push_back(time);
   } else {
@@ -62,7 +65,7 @@ LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : k_(k) {
 }
 
 LRUKReplacer::~LRUKReplacer() {
-  for (auto pair : node_store_) {
+  for (const auto &pair : node_store_) {
     delete (pair.second);
   }
 }
@@ -76,7 +79,7 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   bool inf = false;
   size_t time = current_timestamp_;
   LRUKNode *out;
-  for (auto node : evictable_) {
+  for (const auto &node : evictable_) {
     if (node->Compare(inf, time)) {
       out = node;
     }
@@ -89,18 +92,19 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   return true;
 }
 
-void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
+void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
   latch_.lock();
   LRUKNode *node = node_store_[frame_id];
   size_t time = current_timestamp_++;
+  bool modified = access_type == AccessType::Unknown;
   if (node == nullptr) {
-    node = new LRUKNode(k_, frame_id, false, time);
+    node = new LRUKNode(k_, frame_id, false, time, modified);
     node_store_[frame_id] = node;
     latch_.unlock();
     return;
   }
   latch_.unlock();
-  node->Access(time);
+  node->Access(time, modified);
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {

@@ -15,6 +15,7 @@
 #include <future>  // NOLINT
 #include <optional>
 #include <thread>  // NOLINT
+#include <unordered_map>
 
 #include "common/channel.h"
 #include "storage/disk/disk_manager.h"
@@ -40,6 +41,23 @@ struct DiskRequest {
 
   /** Callback used to signal to the request issuer when the request has been completed. */
   std::promise<bool> callback_;
+};
+
+class PageScheduler {
+ private:
+  DiskManager *disk_manager_;
+  Channel<std::optional<DiskRequest>> waiting_;
+  std::optional<std::thread> running_;
+  size_t timestamp_;
+  void Start();
+
+ public:
+  PageScheduler(DiskRequest req, DiskManager *disk_manager, size_t timestamp);
+  void Schedule(DiskRequest req, size_t timestamp);
+  auto Compare(size_t &timestamp) -> bool;
+  void Stop();
+  void Join();
+  ~PageScheduler() = default;
 };
 
 /**
@@ -85,11 +103,18 @@ class DiskScheduler {
 
  private:
   /** Pointer to the disk manager. */
-  DiskManager *disk_manager_ __attribute__((__unused__));
+  DiskManager *disk_manager_;
   /** A shared queue to concurrently schedule and process requests. When the DiskScheduler's destructor is called,
    * `std::nullopt` is put into the queue to signal to the background thread to stop execution. */
   Channel<std::optional<DiskRequest>> request_queue_;
   /** The background thread responsible for issuing scheduled requests to the disk manager. */
   std::optional<std::thread> background_thread_;
+
+  std::unordered_map<page_id_t, PageScheduler *> page_shedulers_;
+  size_t current_{0};
+  void AddPageScheduler(page_id_t page_id, PageScheduler *page_scheduler);
+
+  static const int MAX_OUTSTANDING = 10;
+  int outstanding_{0};
 };
 }  // namespace bustub

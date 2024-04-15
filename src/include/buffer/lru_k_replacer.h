@@ -35,10 +35,10 @@ class LRUKNode {
   std::deque<size_t> history_;
   size_t k_;
   frame_id_t fid_;
-  bool is_evictable_;
+  bool is_evictable_, is_modified_;
 
-  explicit LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time);
-  void Access(size_t time);
+  explicit LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time, bool modified);
+  void Access(size_t time, bool modified);
   auto Compare(bool &inf, size_t &time) -> bool;
 
   friend class LRUKReplacer;
