@@ -102,7 +102,7 @@ void PageScheduler::Schedule(DiskRequest req, size_t timestamp) {
 }
 
 auto PageScheduler::Compare(size_t &timestamp) -> bool {
-  if (timestamp_ > timestamp) {
+  if (timestamp_ < timestamp) {
     timestamp = timestamp_;
     return true;
   }

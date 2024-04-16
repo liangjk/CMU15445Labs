@@ -56,7 +56,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     page_ready_[fid] = true;
     Page *pg = pages_ + fid;
     pg->page_id_ = pid;
-    pg->is_dirty_ = false;
+    pg->is_dirty_ = true;
     pg->pin_count_ = 1;
     pg->ResetMemory();
     *page_id = pid;
@@ -79,7 +79,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     future.get();
   }
   pg->page_id_ = pid;
-  pg->is_dirty_ = false;
+  pg->is_dirty_ = true;
   pg->pin_count_ = 1;
   pg->ResetMemory();
   *page_id = pid;
@@ -201,6 +201,10 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   }
   page_locks_[fid]->unlock();
   Page *pg = pages_ + fid;
+  if (!pg->IsDirty()) {
+    latch_.unlock();
+    return true;
+  }
   pg->is_dirty_ = false;
   auto buf = new char[BUSTUB_PAGE_SIZE];
   memcpy(buf, pg->GetData(), BUSTUB_PAGE_SIZE);
@@ -219,6 +223,9 @@ void BufferPoolManager::FlushAllPages() {
   futures.reserve(page_table_.size());
   for (const auto &pair : page_table_) {
     Page *pg = pages_ + pair.second;
+    if (!pg->IsDirty()) {
+      continue;
+    }
     auto promise = disk_scheduler_->CreatePromise();
     futures.push_back(promise.get_future());
     disk_scheduler_->Schedule({true, pg->GetData(), pair.first, std::move(promise)});
