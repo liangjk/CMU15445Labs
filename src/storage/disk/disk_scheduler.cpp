@@ -69,6 +69,7 @@ void DiskScheduler::AddPageScheduler(page_id_t page_id, PageScheduler *page_sche
     }
     out->second->Stop();
     out->second->Join();
+    delete (out->second);
     page_shedulers_.erase(out);
   }
   page_shedulers_[page_id] = page_scheduler;
