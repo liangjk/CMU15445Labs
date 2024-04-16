@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>  // NOLINT
 #include <unordered_map>
+#include <vector>
 
 #include "buffer/lru_k_replacer.h"
 #include "common/config.h"
@@ -211,5 +212,9 @@ class BufferPoolManager {
   }
 
   // TODO(student): You may add additional private members and helper functions
+
+  std::vector<std::shared_ptr<std::mutex>> page_locks_;
+  std::vector<bool> page_ready_;
+  std::vector<std::shared_ptr<std::condition_variable>> page_cvs_;
 };
 }  // namespace bustub

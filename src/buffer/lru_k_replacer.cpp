@@ -15,14 +15,11 @@
 
 namespace bustub {
 
-LRUKNode::LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time, bool modified)
-    : history_(1, time), k_(k), fid_(fid), is_evictable_(evictable), is_modified_(modified) {}
+LRUKNode::LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time)
+    : history_(1, time), k_(k), fid_(fid), is_evictable_(evictable) {}
 
-void LRUKNode::Access(size_t time, bool modified) {
+void LRUKNode::Access(size_t time) {
   latch_.lock();
-  if (!is_modified_ && modified) {
-    is_modified_ = true;
-  }
   if (history_.size() < k_) {
     history_.push_back(time);
   } else {
@@ -92,25 +89,29 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   return true;
 }
 
-void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
+void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
   latch_.lock();
   LRUKNode *node = node_store_[frame_id];
   size_t time = current_timestamp_++;
-  bool modified = access_type == AccessType::Unknown;
   if (node == nullptr) {
-    node = new LRUKNode(k_, frame_id, false, time, modified);
+    node = new LRUKNode(k_, frame_id, false, time);
     node_store_[frame_id] = node;
     latch_.unlock();
     return;
   }
   latch_.unlock();
-  node->Access(time, modified);
+  node->Access(time);
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
   latch_.lock();
   LRUKNode *node = node_store_[frame_id];
   if (node == nullptr) {
+    node = new LRUKNode(k_, frame_id, set_evictable, current_timestamp_++);
+    node_store_[frame_id] = node;
+    if (set_evictable) {
+      evictable_.insert(node);
+    }
     latch_.unlock();
     return;
   }
@@ -129,11 +130,12 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
 
 void LRUKReplacer::Remove(frame_id_t frame_id) {
   latch_.lock();
-  LRUKNode *node = node_store_[frame_id];
-  if (node == nullptr) {
+  auto it = node_store_.find(frame_id);
+  if (it == node_store_.end()) {
     latch_.unlock();
     return;
   }
+  LRUKNode *node = it->second;
   if (node->is_evictable_) {
     evictable_.erase(node);
   }

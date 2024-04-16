@@ -41,12 +41,11 @@ void DiskScheduler::StartWorkerThread() {
     auto req = request_queue_.Get();
     if (req.has_value()) {
       auto pid = req->page_id_;
-      PageScheduler *psche = page_shedulers_[pid];
-      if (psche != nullptr) {
-        psche->Schedule(std::move(*req), current_++);
+      auto it = page_shedulers_.find(pid);
+      if (it != page_shedulers_.end()) {
+        it->second->Schedule(std::move(*req), current_++);
       } else {
-        psche = new PageScheduler(std::move(*req), disk_manager_, current_++);
-        AddPageScheduler(pid, psche);
+        AddPageScheduler(pid, new PageScheduler(std::move(*req), disk_manager_, current_++));
       }
     } else {
       for (const auto &pair : page_shedulers_) {
