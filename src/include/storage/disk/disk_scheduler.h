@@ -114,7 +114,7 @@ class DiskScheduler {
   size_t current_{0};
   void AddPageScheduler(page_id_t page_id, PageScheduler *page_scheduler);
 
-  static const int MAX_OUTSTANDING = 10;
+  static const int MAX_OUTSTANDING = 128;
   int outstanding_{0};
 };
 }  // namespace bustub

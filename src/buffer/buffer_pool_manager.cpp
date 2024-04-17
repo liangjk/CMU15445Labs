@@ -20,20 +20,14 @@ namespace bustub {
 
 BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager, size_t replacer_k,
                                      LogManager *log_manager)
-    : pool_size_(pool_size),
-      disk_scheduler_(std::make_unique<DiskScheduler>(disk_manager)),
-      log_manager_(log_manager),
-      page_locks_(pool_size),
-      page_ready_(pool_size, false),
-      page_cvs_(pool_size) {
+    : pool_size_(pool_size), disk_scheduler_(std::make_unique<DiskScheduler>(disk_manager)), log_manager_(log_manager) {
   // we allocate a consecutive memory space for the buffer pool
   pages_ = new Page[pool_size_];
   replacer_ = std::make_unique<LRUKReplacer>(pool_size, replacer_k);
 
-  for (size_t i = 0; i < pool_size_; ++i) {
-    page_locks_[i] = std::make_shared<std::mutex>();
-    page_cvs_[i] = std::make_shared<std::condition_variable>();
-  }
+  page_locks_ = new std::mutex[pool_size_];
+  page_ready_ = new bool[pool_size_];
+  page_cvs_ = new std::condition_variable[pool_size_];
 
   // Initially, every page is in the free list.
   for (size_t i = 0; i < pool_size_; ++i) {
@@ -41,7 +35,33 @@ BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager
   }
 }
 
-BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
+BufferPoolManager::~BufferPoolManager() {
+  delete[] pages_;
+  delete[] page_locks_;
+  delete[] page_ready_;
+  delete[] page_cvs_;
+}
+
+auto BufferPoolManager::WriteBack(Page *page) -> std::thread * {
+  std::unique_lock<std::mutex> lock(wb_lock_);
+  wb_cv_.wait(lock, [&] { return wb_count_ < WB_SIZE; });
+  wb_count_++;
+  Page *cache = write_back_cache_.Add(page);
+  cache->page_id_ = page->GetPageId();
+  return new std::thread(
+      [&](Page *page_cache) {
+        auto promise = disk_scheduler_->CreatePromise();
+        auto future = promise.get_future();
+        disk_scheduler_->Schedule({true, page_cache->GetData(), page_cache->GetPageId(), std::move(promise)});
+        future.get();
+        wb_lock_.lock();
+        write_back_cache_.Remove(page_cache);
+        wb_count_--;
+        wb_lock_.unlock();
+        wb_cv_.notify_one();
+      },
+      cache);
+}
 
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   latch_.lock();
@@ -73,10 +93,9 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   page_table_[pid] = fid;
   latch_.unlock();
   if (pg->IsDirty()) {
-    auto promise = disk_scheduler_->CreatePromise();
-    auto future = promise.get_future();
-    disk_scheduler_->Schedule({true, pg->GetData(), pg->GetPageId(), std::move(promise)});
-    future.get();
+    auto thread = WriteBack(pg);
+    thread->detach();
+    delete thread;
   }
   pg->page_id_ = pid;
   pg->is_dirty_ = false;
@@ -99,8 +118,8 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, AccessType access_type) -> 
     }
     pg->pin_count_++;
     latch_.unlock();
-    std::unique_lock<std::mutex> lock(*page_locks_[fid]);
-    page_cvs_[fid]->wait(lock, [&] { return page_ready_[fid]; });
+    std::unique_lock<std::mutex> lock(page_locks_[fid]);
+    page_cvs_[fid].wait(lock, [&] { return page_ready_[fid]; });
     lock.unlock();
     replacer_->RecordAccess(fid, access_type);
     return pg;
@@ -120,10 +139,10 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, AccessType access_type) -> 
     pg->page_id_ = page_id;
     pg->is_dirty_ = false;
     future.get();
-    page_locks_[fid]->lock();
+    page_locks_[fid].lock();
     page_ready_[fid] = true;
-    page_locks_[fid]->unlock();
-    page_cvs_[fid]->notify_all();
+    page_locks_[fid].unlock();
+    page_cvs_[fid].notify_all();
     return pg;
   }
   if (!replacer_->Evict(&fid)) {
@@ -138,10 +157,9 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, AccessType access_type) -> 
   pg->pin_count_ = 1;
   latch_.unlock();
   if (pg->IsDirty()) {
-    auto promise = disk_scheduler_->CreatePromise();
-    auto future = promise.get_future();
-    disk_scheduler_->Schedule({true, pg->GetData(), pg->GetPageId(), std::move(promise)});
-    future.get();
+    auto thread = WriteBack(pg);
+    thread->detach();
+    delete thread;
   }
   auto promise = disk_scheduler_->CreatePromise();
   auto future = promise.get_future();
@@ -149,14 +167,14 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, AccessType access_type) -> 
   pg->page_id_ = page_id;
   pg->is_dirty_ = false;
   future.get();
-  page_locks_[fid]->lock();
+  page_locks_[fid].lock();
   page_ready_[fid] = true;
-  page_locks_[fid]->unlock();
-  page_cvs_[fid]->notify_all();
+  page_locks_[fid].unlock();
+  page_cvs_[fid].notify_all();
   return pg;
 }
 
-auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unused]] AccessType access_type) -> bool {
+auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, AccessType access_type) -> bool {
   latch_.lock();
   auto it = page_table_.find(page_id);
   if (it == page_table_.end()) {
@@ -169,13 +187,13 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
     latch_.unlock();
     return false;
   }
-  page_locks_[fid]->lock();
+  page_locks_[fid].lock();
   if (!page_ready_[fid]) {
-    page_locks_[fid]->unlock();
+    page_locks_[fid].unlock();
     latch_.unlock();
     return false;
   }
-  page_locks_[fid]->unlock();
+  page_locks_[fid].unlock();
   pg->is_dirty_ |= is_dirty;
   pg->pin_count_--;
   if (pg->pin_count_ == 0) {
@@ -193,23 +211,19 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
     return false;
   }
   frame_id_t fid = it->second;
-  page_locks_[fid]->lock();
+  page_locks_[fid].lock();
   if (!page_ready_[fid]) {
-    page_locks_[fid]->unlock();
+    page_locks_[fid].unlock();
     latch_.unlock();
     return false;
   }
-  page_locks_[fid]->unlock();
+  page_locks_[fid].unlock();
   Page *pg = pages_ + fid;
   pg->is_dirty_ = false;
-  auto buf = new char[BUSTUB_PAGE_SIZE];
-  memcpy(buf, pg->GetData(), BUSTUB_PAGE_SIZE);
+  auto thread = WriteBack(pg);
   latch_.unlock();
-  auto promise = disk_scheduler_->CreatePromise();
-  auto future = promise.get_future();
-  disk_scheduler_->Schedule({true, buf, page_id, std::move(promise)});
-  future.get();
-  delete[] buf;
+  thread->join();
+  delete thread;
   return true;
 }
 
@@ -218,7 +232,14 @@ void BufferPoolManager::FlushAllPages() {
   std::vector<std::future<bool>> futures;
   futures.reserve(page_table_.size());
   for (const auto &pair : page_table_) {
-    Page *pg = pages_ + pair.second;
+    frame_id_t fid = pair.second;
+    page_locks_[fid].lock();
+    if (!page_ready_[fid]) {
+      page_locks_[fid].unlock();
+      continue;
+    }
+    page_locks_[fid].unlock();
+    Page *pg = pages_ + fid;
     auto promise = disk_scheduler_->CreatePromise();
     futures.push_back(promise.get_future());
     disk_scheduler_->Schedule({true, pg->GetData(), pair.first, std::move(promise)});
@@ -239,13 +260,6 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
     return true;
   }
   frame_id_t fid = it->second;
-  page_locks_[fid]->lock();
-  if (!page_ready_[fid]) {
-    page_locks_[fid]->unlock();
-    latch_.unlock();
-    return false;
-  }
-  page_locks_[fid]->unlock();
   Page *pg = pages_ + fid;
   if (pg->GetPinCount() > 0) {
     latch_.unlock();

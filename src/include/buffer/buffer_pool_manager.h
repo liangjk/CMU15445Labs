@@ -16,7 +16,6 @@
 #include <memory>
 #include <mutex>  // NOLINT
 #include <unordered_map>
-#include <vector>
 
 #include "buffer/lru_k_replacer.h"
 #include "common/config.h"
@@ -195,7 +194,7 @@ class BufferPoolManager {
   /** This latch protects shared data structures. We recommend updating this comment to describe what it protects. */
   std::mutex latch_;
   /** This buffer is for the leaderboard task. You may want to use it to optimize the write requests. */
-  WriteBackCache write_back_cache_ __attribute__((__unused__));
+  WriteBackCache write_back_cache_;
 
   /**
    * @brief Allocate a page on disk. Caller should acquire the latch before calling this function.
@@ -213,8 +212,15 @@ class BufferPoolManager {
 
   // TODO(student): You may add additional private members and helper functions
 
-  std::vector<std::shared_ptr<std::mutex>> page_locks_;
-  std::vector<bool> page_ready_;
-  std::vector<std::shared_ptr<std::condition_variable>> page_cvs_;
+  std::mutex *page_locks_;
+  bool *page_ready_;
+  std::condition_variable *page_cvs_;
+
+  std::mutex wb_lock_;
+  std::condition_variable wb_cv_;
+  int wb_count_{0};
+  static const int WB_SIZE = 8;
+
+  auto WriteBack(Page *page) -> std::thread *;
 };
 }  // namespace bustub
