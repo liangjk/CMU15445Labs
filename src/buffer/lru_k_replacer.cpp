@@ -19,47 +19,15 @@ LRUKNode::LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time)
     : history_(1, time), k_(k), fid_(fid), is_evictable_(evictable) {}
 
 void LRUKNode::Access(size_t time) {
-  latch_.lock();
   if (history_.size() < k_) {
     history_.push_back(time);
   } else {
     history_.pop_front();
     history_.push_back(time);
   }
-  latch_.unlock();
 }
 
-auto LRUKNode::Compare(bool &inf, size_t &time) -> bool {
-  latch_.lock();
-  size_t size = history_.size();
-  size_t lra = history_.front();
-  latch_.unlock();
-  if (inf) {
-    if (size >= k_) {
-      return false;
-    }
-    if (lra < time) {
-      time = lra;
-      return true;
-    }
-    return false;
-  }
-  if (size < k_) {
-    inf = true;
-    time = lra;
-    return true;
-  }
-  if (lra < time) {
-    time = lra;
-    return true;
-  }
-  return false;
-}
-
-LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : k_(k) {
-  node_store_.reserve(num_frames);
-  evictable_.reserve(num_frames);
-}
+LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : k_(k) { node_store_.reserve(num_frames); }
 
 LRUKReplacer::~LRUKReplacer() {
   for (const auto &pair : node_store_) {
@@ -73,15 +41,9 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
     latch_.unlock();
     return false;
   }
-  bool inf = false;
-  size_t time = current_timestamp_;
-  LRUKNode *out;
-  for (const auto &node : evictable_) {
-    if (node->Compare(inf, time)) {
-      out = node;
-    }
-  }
-  evictable_.erase(out);
+  auto it = evictable_.begin();
+  auto out = *it;
+  evictable_.erase(it);
   node_store_.erase(out->fid_);
   latch_.unlock();
   *frame_id = out->fid_;
@@ -99,8 +61,14 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
     latch_.unlock();
     return;
   }
+  if (node->is_evictable_) {
+    evictable_.erase(node);
+    node->Access(time);
+    evictable_.insert(node);
+  } else {
+    node->Access(time);
+  }
   latch_.unlock();
-  node->Access(time);
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {

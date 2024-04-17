@@ -115,6 +115,7 @@ class ReadPageGuard {
  public:
   ReadPageGuard() = default;
   ReadPageGuard(BufferPoolManager *bpm, Page *page);
+  explicit ReadPageGuard(BasicPageGuard *guard);
   ReadPageGuard(const ReadPageGuard &) = delete;
   auto operator=(const ReadPageGuard &) -> ReadPageGuard & = delete;
 
@@ -175,6 +176,7 @@ class WritePageGuard {
  public:
   WritePageGuard() = default;
   WritePageGuard(BufferPoolManager *bpm, Page *page);
+  explicit WritePageGuard(BasicPageGuard *guard);
   WritePageGuard(const WritePageGuard &) = delete;
   auto operator=(const WritePageGuard &) -> WritePageGuard & = delete;
 

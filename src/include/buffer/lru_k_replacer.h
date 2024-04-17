@@ -15,9 +15,8 @@
 #include <deque>
 #include <limits>
 #include <mutex>  // NOLINT
+#include <set>
 #include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -31,7 +30,6 @@ class LRUKNode {
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
-  std::mutex latch_;
   std::deque<size_t> history_;
   size_t k_;
   frame_id_t fid_;
@@ -39,9 +37,26 @@ class LRUKNode {
 
   explicit LRUKNode(size_t k, frame_id_t fid, bool evictable, size_t time);
   void Access(size_t time);
-  auto Compare(bool &inf, size_t &time) -> bool;
 
   friend class LRUKReplacer;
+  friend struct LRUKNodeComparer;
+};
+
+struct LRUKNodeComparer {
+  auto operator()(const LRUKNode *lhs, const LRUKNode *rhs) const -> bool {
+    auto lfull = lhs->history_.size() == lhs->k_;
+    auto rfull = rhs->history_.size() == rhs->k_;
+    if (lfull) {
+      if (rfull) {
+        return lhs->history_.front() < rhs->history_.front();
+      }
+      return false;
+    }
+    if (rfull) {
+      return true;
+    }
+    return lhs->history_.front() < rhs->history_.front();
+  }
 };
 
 /**
@@ -159,7 +174,7 @@ class LRUKReplacer {
   // TODO(student): implement me! You can replace these member variables as you like.
   // Remove maybe_unused if you start using them.
   std::unordered_map<frame_id_t, LRUKNode *> node_store_;
-  std::unordered_set<LRUKNode *> evictable_;
+  std::set<LRUKNode *, LRUKNodeComparer> evictable_;
   size_t current_timestamp_{0};
   size_t k_;
   std::mutex latch_;

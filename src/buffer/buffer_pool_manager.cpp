@@ -220,7 +220,9 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   page_locks_[fid].unlock();
   Page *pg = pages_ + fid;
   pg->is_dirty_ = false;
+  pg->RLatch();
   auto thread = WriteBack(pg);
+  pg->RUnlatch();
   latch_.unlock();
   thread->join();
   delete thread;
@@ -229,26 +231,37 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
 
 void BufferPoolManager::FlushAllPages() {
   latch_.lock();
-  std::vector<std::future<bool>> futures;
-  futures.reserve(page_table_.size());
+  size_t sz = page_table_.size();
+  auto futures = new std::future<bool>[sz];
+  auto pages = new Page *[sz];
+  size_t index = 0;
   for (const auto &pair : page_table_) {
     frame_id_t fid = pair.second;
     page_locks_[fid].lock();
     if (!page_ready_[fid]) {
       page_locks_[fid].unlock();
+      pages[index] = nullptr;
       continue;
     }
     page_locks_[fid].unlock();
     Page *pg = pages_ + fid;
     auto promise = disk_scheduler_->CreatePromise();
-    futures.push_back(promise.get_future());
+    pages[index] = pg;
+    futures[index] = promise.get_future();
+    pg->RLatch();
     disk_scheduler_->Schedule({true, pg->GetData(), pair.first, std::move(promise)});
     pg->is_dirty_ = false;
+    ++index;
   }
-  for (auto &future : futures) {
-    future.get();
+  for (index = 0; index < sz; ++index) {
+    if (pages[index] != nullptr) {
+      futures[index].get();
+      pages[index]->RUnlatch();
+    }
   }
   latch_.unlock();
+  delete[] futures;
+  delete[] pages;
 }
 
 auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
@@ -275,12 +288,30 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
 
 auto BufferPoolManager::AllocatePage() -> page_id_t { return next_page_id_++; }
 
-auto BufferPoolManager::FetchPageBasic(page_id_t page_id) -> BasicPageGuard { return {this, nullptr}; }
+auto BufferPoolManager::FetchPageBasic(page_id_t page_id) -> BasicPageGuard {
+  Page *pg = FetchPage(page_id);
+  return {this, pg};
+}
 
-auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard { return {this, nullptr}; }
+auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard {
+  Page *pg = FetchPage(page_id);
+  if (pg != nullptr) {
+    pg->RLatch();
+  }
+  return {this, pg};
+}
 
-auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard { return {this, nullptr}; }
+auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard {
+  Page *pg = FetchPage(page_id);
+  if (pg != nullptr) {
+    pg->WLatch();
+  }
+  return {this, pg};
+}
 
-auto BufferPoolManager::NewPageGuarded(page_id_t *page_id) -> BasicPageGuard { return {this, nullptr}; }
+auto BufferPoolManager::NewPageGuarded(page_id_t *page_id) -> BasicPageGuard {
+  Page *pg = NewPage(page_id);
+  return {this, pg};
+}
 
 }  // namespace bustub
