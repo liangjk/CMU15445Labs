@@ -17,7 +17,7 @@
 namespace bustub {
 
 DiskScheduler::DiskScheduler(DiskManager *disk_manager) : disk_manager_(disk_manager) {
-  page_shedulers_.reserve(MAX_OUTSTANDING);
+  page_schedulers_.reserve(MAX_OUTSTANDING);
 
   // Spawn the background thread
   background_thread_.emplace([&] { StartWorkerThread(); });
@@ -29,7 +29,7 @@ DiskScheduler::~DiskScheduler() {
   if (background_thread_.has_value()) {
     background_thread_->join();
   }
-  for (const auto &pair : page_shedulers_) {
+  for (const auto &pair : page_schedulers_) {
     pair.second->Join();
     delete (pair.second);
   }
@@ -42,14 +42,14 @@ void DiskScheduler::StartWorkerThread() {
     auto req = request_queue_.Get();
     if (req.has_value()) {
       auto pid = req->page_id_;
-      auto it = page_shedulers_.find(pid);
-      if (it != page_shedulers_.end()) {
+      auto it = page_schedulers_.find(pid);
+      if (it != page_schedulers_.end()) {
         it->second->Schedule(std::move(*req), current_++);
       } else {
         AddPageScheduler(pid, new PageScheduler(std::move(*req), disk_manager_, current_++));
       }
     } else {
-      for (const auto &pair : page_shedulers_) {
+      for (const auto &pair : page_schedulers_) {
         pair.second->Stop();
       }
       break;
@@ -63,7 +63,7 @@ void DiskScheduler::AddPageScheduler(page_id_t page_id, PageScheduler *page_sche
   } else {
     size_t timestamp = current_;
     std::unordered_map<page_id_t, PageScheduler *>::iterator out;
-    for (auto it = page_shedulers_.begin(); it != page_shedulers_.end(); it++) {
+    for (auto it = page_schedulers_.begin(); it != page_schedulers_.end(); it++) {
       if (it->second->Compare(timestamp)) {
         out = it;
       }
@@ -71,9 +71,9 @@ void DiskScheduler::AddPageScheduler(page_id_t page_id, PageScheduler *page_sche
     out->second->Stop();
     out->second->Join();
     delete (out->second);
-    page_shedulers_.erase(out);
+    page_schedulers_.erase(out);
   }
-  page_shedulers_[page_id] = page_scheduler;
+  page_schedulers_[page_id] = page_scheduler;
 }
 
 PageScheduler::PageScheduler(DiskRequest req, DiskManager *disk_manager, size_t timestamp)
@@ -127,7 +127,7 @@ void PageScheduler::Join() {
 // namespace bustub {
 
 // DiskScheduler::DiskScheduler(DiskManager *disk_manager) : disk_manager_(disk_manager) {
-//   page_shedulers_.reserve(MAX_OUTSTANDING);
+//   page_schedulers_.reserve(MAX_OUTSTANDING);
 
 //   // Spawn the background thread
 //   background_thread_.emplace([&] { StartWorkerThread(); });
@@ -139,7 +139,7 @@ void PageScheduler::Join() {
 //   if (background_thread_.has_value()) {
 //     background_thread_->join();
 //   }
-//   for (const auto &pair : page_shedulers_) {
+//   for (const auto &pair : page_schedulers_) {
 //     pair.second->Join();
 //     delete (pair.second);
 //   }
@@ -152,8 +152,8 @@ void PageScheduler::Join() {
 //     auto req = request_queue_.Get();
 //     if (req.has_value()) {
 //       auto pid = req->page_id_;
-//       auto it = page_shedulers_.find(pid);
-//       if (it != page_shedulers_.end()) {
+//       auto it = page_schedulers_.find(pid);
+//       if (it != page_schedulers_.end()) {
 //         if (it->second->Join()) {
 //           delete (it->second);
 //           it->second = new PageScheduler(std::move(*req), disk_manager_, current_++);
@@ -164,7 +164,7 @@ void PageScheduler::Join() {
 //         AddPageScheduler(pid, new PageScheduler(std::move(*req), disk_manager_, current_++));
 //       }
 //     } else {
-//       for (const auto &pair : page_shedulers_) {
+//       for (const auto &pair : page_schedulers_) {
 //         pair.second->Stop();
 //       }
 //       break;
@@ -177,7 +177,7 @@ void PageScheduler::Join() {
 //   if (outstanding_ >= MAX_OUTSTANDING) {
 //     size_t timestamp = current_;
 //     std::vector<std::pair<page_id_t, PageScheduler *>> to_delete;
-//     for (const auto &pair : page_shedulers_) {
+//     for (const auto &pair : page_schedulers_) {
 //       if (pair.second->Join()) {
 //         to_delete.emplace_back(pair);
 //       } else if (pair.second->Compare(timestamp)) {
@@ -185,12 +185,12 @@ void PageScheduler::Join() {
 //       }
 //     }
 //     for (const auto &pair : to_delete) {
-//       page_shedulers_.erase(pair.first);
+//       page_schedulers_.erase(pair.first);
 //       delete (pair.second);
 //     }
 //     outstanding_ -= to_delete.size();
 //   }
-//   page_shedulers_[page_id] = page_scheduler;
+//   page_schedulers_[page_id] = page_scheduler;
 // }
 
 // PageScheduler::PageScheduler(DiskRequest req, DiskManager *disk_manager, size_t timestamp)

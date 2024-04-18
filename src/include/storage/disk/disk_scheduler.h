@@ -110,7 +110,7 @@ class DiskScheduler {
   /** The background thread responsible for issuing scheduled requests to the disk manager. */
   std::optional<std::thread> background_thread_;
 
-  std::unordered_map<page_id_t, PageScheduler *> page_shedulers_;
+  std::unordered_map<page_id_t, PageScheduler *> page_schedulers_;
   size_t current_{0};
   void AddPageScheduler(page_id_t page_id, PageScheduler *page_scheduler);
 
@@ -228,7 +228,7 @@ class DiskScheduler {
 //   /** The background thread responsible for issuing scheduled requests to the disk manager. */
 //   std::optional<std::thread> background_thread_;
 
-//   std::unordered_map<page_id_t, PageScheduler *> page_shedulers_;
+//   std::unordered_map<page_id_t, PageScheduler *> page_schedulers_;
 //   size_t current_{0};
 //   void AddPageScheduler(page_id_t page_id, PageScheduler *page_scheduler);
 
