@@ -40,6 +40,8 @@ BufferPoolManager::~BufferPoolManager() {
   delete[] page_locks_;
   delete[] page_ready_;
   delete[] page_cvs_;
+  std::unique_lock<std::mutex> lock(wb_lock_);
+  wb_cv_.wait(lock, [&] { return wb_count_ == 0; });
 }
 
 auto BufferPoolManager::WriteBack(Page *page) -> std::thread * {

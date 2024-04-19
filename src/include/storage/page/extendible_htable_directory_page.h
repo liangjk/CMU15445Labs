@@ -29,7 +29,7 @@
 
 namespace bustub {
 
-static constexpr uint64_t HTABLE_DIRECTORY_PAGE_METADATA_SIZE = sizeof(uint32_t) * 2;
+static constexpr uint64_t HTABLE_DIRECTORY_PAGE_METADATA_SIZE = sizeof(uint32_t) * 4;
 
 /**
  * HTABLE_DIRECTORY_ARRAY_SIZE is the number of page_ids that can fit in the directory page of an extendible hash index.
@@ -190,10 +190,11 @@ class ExtendibleHTableDirectoryPage {
   void PrintDirectory() const;
 
  private:
-  uint32_t max_depth_;
-  uint32_t global_depth_;
+  uint32_t max_depth_, max_size_;
+  uint32_t global_depth_, current_size_;
   uint8_t local_depths_[HTABLE_DIRECTORY_ARRAY_SIZE];
   page_id_t bucket_page_ids_[HTABLE_DIRECTORY_ARRAY_SIZE];
+
 };
 
 static_assert(sizeof(page_id_t) == 4);

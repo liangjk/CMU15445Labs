@@ -25,7 +25,7 @@
 
 namespace bustub {
 
-static constexpr uint64_t HTABLE_HEADER_PAGE_METADATA_SIZE = sizeof(uint32_t);
+static constexpr uint64_t HTABLE_HEADER_PAGE_METADATA_SIZE = sizeof(uint32_t) * 2;
 static constexpr uint64_t HTABLE_HEADER_MAX_DEPTH = 9;
 static constexpr uint64_t HTABLE_HEADER_ARRAY_SIZE = 1 << HTABLE_HEADER_MAX_DEPTH;
 
@@ -56,7 +56,7 @@ class ExtendibleHTableHeaderPage {
    * @param directory_idx index in the directory page id array
    * @return directory page_id at index
    */
-  auto GetDirectoryPageId(uint32_t directory_idx) const -> uint32_t;
+  auto GetDirectoryPageId(uint32_t directory_idx) const -> page_id_t;
 
   /**
    * @brief Set the directory page id at an index
@@ -78,7 +78,7 @@ class ExtendibleHTableHeaderPage {
 
  private:
   page_id_t directory_page_ids_[HTABLE_HEADER_ARRAY_SIZE];
-  uint32_t max_depth_;
+  uint32_t max_depth_, max_size_;
 };
 
 static_assert(sizeof(page_id_t) == 4);
