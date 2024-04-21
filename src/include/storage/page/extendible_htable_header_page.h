@@ -58,6 +58,10 @@ class ExtendibleHTableHeaderPage {
    */
   auto GetDirectoryPageId(uint32_t directory_idx) const -> page_id_t;
 
+  auto GetDirectoryPageIdHash(uint32_t hash) const -> page_id_t;
+
+  auto GetDirectoryPageIdSafe(uint32_t directory_idx) const -> page_id_t;
+
   /**
    * @brief Set the directory page id at an index
    *
@@ -65,6 +69,8 @@ class ExtendibleHTableHeaderPage {
    * @param directory_page_id page id of the directory
    */
   void SetDirectoryPageId(uint32_t directory_idx, page_id_t directory_page_id);
+
+  void SetDirectoryPageIdSafe(uint32_t directory_idx, page_id_t directory_page_id);
 
   /**
    * @brief Get the maximum number of directory page ids the header page could handle

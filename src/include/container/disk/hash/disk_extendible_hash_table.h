@@ -53,6 +53,8 @@ class DiskExtendibleHashTable {
                                    uint32_t directory_max_depth = HTABLE_DIRECTORY_MAX_DEPTH,
                                    uint32_t bucket_max_size = HTableBucketArraySize(sizeof(std::pair<K, V>)));
 
+  ~DiskExtendibleHashTable();
+
   /** TODO(P2): Add implementation
    * Inserts a key-value pair into the hash table.
    *
@@ -110,18 +112,12 @@ class DiskExtendibleHashTable {
    */
   auto Hash(K key) const -> uint32_t;
 
-  auto InsertToNewDirectory(ExtendibleHTableHeaderPage *header, uint32_t directory_idx, uint32_t hash, const K &key,
-                            const V &value) -> bool;
-
-  auto InsertToNewBucket(ExtendibleHTableDirectoryPage *directory, uint32_t bucket_idx, const K &key, const V &value)
-      -> bool;
-
-  void UpdateDirectoryMapping(ExtendibleHTableDirectoryPage *directory, uint32_t new_bucket_idx,
-                              page_id_t new_bucket_page_id, uint32_t new_local_depth, uint32_t local_depth_mask);
+  void NewDirectory(ExtendibleHTableHeaderPage *header, uint32_t hash, page_id_t &dir_pid, Page *&dir_page,
+                    ExtendibleHTableDirectoryPage *&dir_obj, page_id_t &bucket_pid, Page *&bucket_page,
+                    ExtendibleHTableBucketPage<K, V, KC> *&bucket_obj);
 
   void MigrateEntries(ExtendibleHTableBucketPage<K, V, KC> *old_bucket,
-                      ExtendibleHTableBucketPage<K, V, KC> *new_bucket, uint32_t new_bucket_idx,
-                      uint32_t local_depth_mask);
+                      ExtendibleHTableBucketPage<K, V, KC> *new_bucket, uint32_t bit_flag, uint32_t hashes[]);
 
   // member variables
   std::string index_name_;

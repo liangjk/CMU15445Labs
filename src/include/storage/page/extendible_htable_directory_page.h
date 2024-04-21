@@ -71,6 +71,10 @@ class ExtendibleHTableDirectoryPage {
    */
   auto GetBucketPageId(uint32_t bucket_idx) const -> page_id_t;
 
+  auto GetBucketPageIdSafe(uint32_t bucket_idx) const -> page_id_t;
+
+  auto GetBucketPageIdHash(uint32_t hash) const -> page_id_t;
+
   /**
    * Updates the directory index using a bucket index and page_id
    *
@@ -78,6 +82,8 @@ class ExtendibleHTableDirectoryPage {
    * @param bucket_page_id page_id to insert
    */
   void SetBucketPageId(uint32_t bucket_idx, page_id_t bucket_page_id);
+
+  void SetBucketPageIdSafe(uint32_t bucket_idx, page_id_t bucket_page_id);
 
   /**
    * Gets the split image of an index
@@ -136,6 +142,10 @@ class ExtendibleHTableDirectoryPage {
    */
   auto CanShrink() -> bool;
 
+  void TryShrink();
+
+  auto Merge(uint32_t bucket_idx, uint32_t split_idx, bool must_use_split) -> bool;
+
   /**
    * @return the current directory size
    */
@@ -152,7 +162,9 @@ class ExtendibleHTableDirectoryPage {
    * @param bucket_idx the bucket index to lookup
    * @return the local depth of the bucket at bucket_idx
    */
-  auto GetLocalDepth(uint32_t bucket_idx) const -> uint32_t;
+  auto GetLocalDepth(uint32_t bucket_idx) const -> uint8_t;
+
+  auto GetLocalDepthSafe(uint32_t bucket_idx) const -> uint8_t;
 
   /**
    * Set the local depth of the bucket at bucket_idx to local_depth
@@ -161,6 +173,8 @@ class ExtendibleHTableDirectoryPage {
    * @param local_depth new local depth
    */
   void SetLocalDepth(uint32_t bucket_idx, uint8_t local_depth);
+
+  void Split(uint32_t bucket_idx, page_id_t split_page_id, bool stay);
 
   /**
    * Increment the local depth of the bucket at bucket_idx

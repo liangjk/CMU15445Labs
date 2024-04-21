@@ -21,13 +21,14 @@ void ExtendibleHTableHeaderPage::Init(uint32_t max_depth) {
     return;
   }
   max_depth_ = max_depth;
+  max_size_ = 1 << max_depth;
   for (uint32_t i = 0; i < max_size_; ++i) {
     directory_page_ids_[i] = INVALID_PAGE_ID;
   }
 }
 
 auto ExtendibleHTableHeaderPage::HashToDirectoryIndex(uint32_t hash) const -> uint32_t {
-  return hash >> (32 - max_depth_);
+  return static_cast<uint64_t>(hash) >> (32 - max_depth_);
 }
 
 auto ExtendibleHTableHeaderPage::GetDirectoryPageId(uint32_t directory_idx) const -> page_id_t {
@@ -37,10 +38,22 @@ auto ExtendibleHTableHeaderPage::GetDirectoryPageId(uint32_t directory_idx) cons
   return directory_page_ids_[directory_idx];
 }
 
+auto ExtendibleHTableHeaderPage::GetDirectoryPageIdSafe(uint32_t directory_idx) const -> page_id_t {
+  return directory_page_ids_[directory_idx];
+}
+
+auto ExtendibleHTableHeaderPage::GetDirectoryPageIdHash(uint32_t hash) const -> page_id_t {
+  return directory_page_ids_[HashToDirectoryIndex(hash)];
+}
+
 void ExtendibleHTableHeaderPage::SetDirectoryPageId(uint32_t directory_idx, page_id_t directory_page_id) {
   if (directory_idx < max_size_) {
     directory_page_ids_[directory_idx] = directory_page_id;
   }
+}
+
+void ExtendibleHTableHeaderPage::SetDirectoryPageIdSafe(uint32_t directory_idx, page_id_t directory_page_id) {
+  directory_page_ids_[directory_idx] = directory_page_id;
 }
 
 auto ExtendibleHTableHeaderPage::MaxSize() const -> uint32_t { return max_size_; }

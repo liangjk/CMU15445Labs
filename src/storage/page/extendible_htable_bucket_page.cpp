@@ -36,6 +36,17 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Lookup(const K &key, V &value, const 
 }
 
 template <typename K, typename V, typename KC>
+auto ExtendibleHTableBucketPage<K, V, KC>::Find(const K &key, const KC &cmp, uint32_t &bucket_idx) const -> bool {
+  for (uint32_t i = 0; i < size_; ++i) {
+    if (cmp(key, array_[i].first) == 0) {
+      bucket_idx = i;
+      return true;
+    }
+  }
+  return false;
+}
+
+template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, const KC &cmp) -> bool {
   if (IsFull()) {
     return false;
@@ -49,6 +60,19 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, 
   array_[size_].second = value;
   ++size_;
   return true;
+}
+
+template <typename K, typename V, typename KC>
+void ExtendibleHTableBucketPage<K, V, KC>::SafeInsert(const K &key, const V &value) {
+  array_[size_].first = key;
+  array_[size_].second = value;
+  ++size_;
+}
+
+template <typename K, typename V, typename KC>
+void ExtendibleHTableBucketPage<K, V, KC>::InsertPair(const std::pair<K, V> &pair) {
+  array_[size_] = pair;
+  ++size_;
 }
 
 template <typename K, typename V, typename KC>
@@ -66,8 +90,19 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Remove(const K &key, const KC &cmp) -
 }
 
 template <typename K, typename V, typename KC>
+void ExtendibleHTableBucketPage<K, V, KC>::RemoveAt(uint32_t bucket_idx) {
+  --size_;
+  array_[bucket_idx] = array_[size_];
+}
+
+template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::KeyAt(uint32_t bucket_idx) const -> K {
   return array_[bucket_idx].first;
+}
+
+template <typename K, typename V, typename KC>
+auto ExtendibleHTableBucketPage<K, V, KC>::PairAt(uint32_t bucket_idx) const -> const std::pair<K, V> & {
+  return array_[bucket_idx];
 }
 
 template <typename K, typename V, typename KC>

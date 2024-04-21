@@ -68,6 +68,8 @@ class ExtendibleHTableBucketPage {
    */
   auto Lookup(const KeyType &key, ValueType &value, const KeyComparator &cmp) const -> bool;
 
+  auto Find(const KeyType &key, const KeyComparator &cmp, uint32_t &bucket_idx) const -> bool;
+
   /**
    * Attempts to insert a key and value in the bucket.
    *
@@ -78,6 +80,10 @@ class ExtendibleHTableBucketPage {
    */
   auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &cmp) -> bool;
 
+  void SafeInsert(const KeyType &key, const ValueType &value);
+
+  void InsertPair(const MappingType &pair);
+
   /**
    * Removes a key and value.
    *
@@ -85,7 +91,7 @@ class ExtendibleHTableBucketPage {
    */
   auto Remove(const KeyType &key, const KeyComparator &cmp) -> bool;
 
-  // void RemoveAt(uint32_t bucket_idx);
+  void RemoveAt(uint32_t bucket_idx);
 
   /**
    * @brief Gets the key at an index in the bucket.
@@ -94,6 +100,8 @@ class ExtendibleHTableBucketPage {
    * @return key at index bucket_idx of the bucket
    */
   auto KeyAt(uint32_t bucket_idx) const -> KeyType;
+
+  auto PairAt(uint32_t bucket_idx) const -> const MappingType &;
 
   /**
    * Gets the value at an index in the bucket.
