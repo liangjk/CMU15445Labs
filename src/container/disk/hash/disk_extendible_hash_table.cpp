@@ -141,7 +141,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
   dir_page->WLatch();
   uint32_t dir_idx = dir_obj->HashToBucketIndex(hash);
   auto new_bucket = dir_obj->GetBucketPageIdSafe(dir_idx);
-  if (new_bucket != bucket_pid) [[unlikely]] {
+  if (new_bucket != bucket_pid) [[unlikely]] {  // NOLINT
     bpm_->UnpinPage(bucket_pid, false);
     bucket_pid = new_bucket;
     bucket_page = bpm_->FetchPage(bucket_pid);
@@ -156,12 +156,12 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
       bpm_->UnpinPage(dir_pid, dir_dirty);
     };
 
-    if (bucket_obj->Find(key, cmp_, bucket_idx)) [[unlikely]] {
+    if (bucket_obj->Find(key, cmp_, bucket_idx)) [[unlikely]] {  // NOLINT
       end(false, false);
       return false;
     }
 
-    if (!bucket_obj->IsFull()) [[unlikely]] {
+    if (!bucket_obj->IsFull()) [[unlikely]] {  // NOLINT
       bucket_obj->SafeInsert(key, value);
       end(false, true);
       return true;
@@ -175,7 +175,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
       hash_diff |= hashes[i] ^ hashes[0];
     }
 
-    if ((((hash ^ hashes[0]) | hash_diff) & ((1 << directory_max_depth_) - 1)) != 0) [[likely]] {
+    if ((((hash ^ hashes[0]) | hash_diff) & ((1 << directory_max_depth_) - 1)) != 0) [[likely]] {  // NOLINT
       bool bucket_dirty = false;
       uint8_t local_depth = dir_obj->GetLocalDepthSafe(dir_idx);
       uint32_t bit_flag = 1 << local_depth;
@@ -225,7 +225,7 @@ void DiskExtendibleHashTable<K, V, KC>::NewDirectory(ExtendibleHTableHeaderPage 
                                                      ExtendibleHTableBucketPage<K, V, KC> *&bucket_obj) {
   auto header_idx = header->HashToDirectoryIndex(hash);
   dir_pid = header->GetDirectoryPageIdSafe(header_idx);
-  if (dir_pid == INVALID_PAGE_ID) [[likely]] {
+  if (dir_pid == INVALID_PAGE_ID) [[likely]] {  // NOLINT
     dir_page = bpm_->NewPage(&dir_pid);
     bpm_->SetDirty(dir_page, true);
     dir_obj = reinterpret_cast<ExtendibleHTableDirectoryPage *>(dir_page->GetData());
@@ -316,7 +316,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
 
     auto bucket_local_depth = dir_obj->GetLocalDepthSafe(dir_idx);
 
-    if (bucket_local_depth == 0) [[unlikely]] {
+    if (bucket_local_depth == 0) [[unlikely]] {  // NOLINT
       end(true);
       return true;
     }
@@ -345,12 +345,12 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
     }
 
     auto new_idx = dir_obj->HashToBucketIndex(hash);
-    if (new_idx != dir_idx) [[unlikely]] {
+    if (new_idx != dir_idx) [[unlikely]] {  // NOLINT
       end(false);
       return true;
     }
     auto new_pid = dir_obj->GetBucketPageIdSafe(new_idx);
-    if (new_pid != bucket_pid) [[unlikely]] {
+    if (new_pid != bucket_pid) [[unlikely]] {  // NOLINT
       end(false);
       bpm_->DeletePage(bucket_pid);
       return true;
