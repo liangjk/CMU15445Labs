@@ -199,8 +199,9 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
           bucket_page = split_page;
           bucket_obj = split_obj;
         } else {
-          bpm_->UnpinPage(split_pid, bucket_dirty);
+          bpm_->UnpinPage(split_pid, true);
         }
+        bit_flag <<= 1;
       } while (bucket_obj->IsFull());
 
       bucket_obj->SafeInsert(key, value);

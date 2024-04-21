@@ -180,6 +180,7 @@ void ExtendibleHTableDirectoryPage::Split(uint32_t bucket_idx, page_id_t split_p
   if (local_depth < global_depth_) {
     uint32_t border = 1 << (global_depth_ - 1);
     uint32_t step = 1 << local_depth;
+    bucket_idx &= step - 1;
     for (; bucket_idx < border; bucket_idx += step) {
       bucket_page_ids_[bucket_idx] = former;
       local_depths_[bucket_idx] = local_depth + 1;
