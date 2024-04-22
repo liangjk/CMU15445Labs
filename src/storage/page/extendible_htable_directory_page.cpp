@@ -116,13 +116,14 @@ void ExtendibleHTableDirectoryPage::TryShrink() {
   }
 }
 
-auto ExtendibleHTableDirectoryPage::Merge(uint32_t bucket_idx, uint32_t split_idx, bool must_use_split) -> bool {
+auto ExtendibleHTableDirectoryPage::Merge(uint32_t bucket_idx, uint32_t split_idx, bool must_use_bucket,
+                                          bool must_use_split) -> bool {
   auto local_depth = local_depths_[bucket_idx];
   auto local_size = 1 << local_depth;
   auto local_depth_mask = local_size - 1;
   auto bucket_start = bucket_idx & local_depth_mask;
   auto split_start = split_idx & local_depth_mask;
-  bool use_split = must_use_split || (split_start > bucket_start);
+  bool use_split = must_use_split || (!must_use_bucket && (split_start > bucket_start));
   if (use_split) {
     auto new_pid = bucket_page_ids_[split_idx];
     for (auto i = bucket_start; i < current_size_; i += local_size) {

@@ -144,7 +144,7 @@ class ExtendibleHTableDirectoryPage {
 
   void TryShrink();
 
-  auto Merge(uint32_t bucket_idx, uint32_t split_idx, bool must_use_split) -> bool;
+  auto Merge(uint32_t bucket_idx, uint32_t split_idx, bool must_use_bucket, bool must_use_split) -> bool;
 
   /**
    * @return the current directory size

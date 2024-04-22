@@ -44,12 +44,11 @@ DiskExtendibleHashTable<K, V, KC>::DiskExtendibleHashTable(const std::string &na
   auto header_page = bpm_->NewPage(&header_page_id_);
   auto header_obj = reinterpret_cast<ExtendibleHTableHeaderPage *>(header_page->GetData());
   header_obj->Init(header_max_depth);
+  bpm_->UnpinPage(header_page_id_, true);
 }
 
 template <typename K, typename V, typename KC>
-DiskExtendibleHashTable<K, V, KC>::~DiskExtendibleHashTable() {
-  bpm_->UnpinPage(header_page_id_, true);
-}
+DiskExtendibleHashTable<K, V, KC>::~DiskExtendibleHashTable() {}
 
 /*****************************************************************************
  * SEARCH
@@ -358,6 +357,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
 
     auto old_depth = dir_obj->GetLocalDepthSafe(dir_idx);
     auto new_depth = old_depth;
+    bool bucket_empty = true;
 
     for (; new_depth > 0; --new_depth) {
       auto split_idx = dir_obj->GetSplitImageIndex(dir_idx);
@@ -369,13 +369,16 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
       auto split_page = bpm_->FetchPage(split_pid);
       auto split_obj = reinterpret_cast<ExtendibleHTableBucketPage<K, V, KC> *>(split_page->GetData());
       if (!split_obj->IsEmpty()) {
-        dir_obj->Merge(dir_idx, split_idx, true);
+        if (!bucket_empty) {
+          bpm_->UnpinPage(split_pid, false);
+          break;
+        }
+        dir_obj->Merge(dir_idx, split_idx, false, true);
         bpm_->UnpinPage(bucket_pid, false);
         bpm_->DeletePage(bucket_pid);
         bucket_pid = split_pid;
-        break;
-      }
-      if (dir_obj->Merge(dir_idx, split_idx, false)) {
+        bucket_empty = false;
+      } else if (dir_obj->Merge(dir_idx, split_idx, !bucket_empty, false)) {
         bpm_->UnpinPage(bucket_pid, false);
         bpm_->DeletePage(bucket_pid);
         bucket_pid = split_pid;
