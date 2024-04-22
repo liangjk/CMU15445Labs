@@ -44,11 +44,41 @@ DiskExtendibleHashTable<K, V, KC>::DiskExtendibleHashTable(const std::string &na
   auto header_page = bpm_->NewPage(&header_page_id_);
   auto header_obj = reinterpret_cast<ExtendibleHTableHeaderPage *>(header_page->GetData());
   header_obj->Init(header_max_depth);
-  bpm_->UnpinPage(header_page_id_, true);
+  header_pinned_ = true;
 }
 
 template <typename K, typename V, typename KC>
-DiskExtendibleHashTable<K, V, KC>::~DiskExtendibleHashTable() {}
+DiskExtendibleHashTable<K, V, KC>::~DiskExtendibleHashTable() {
+  UnpinHeader();
+}
+
+template <typename K, typename V, typename KC>
+void DiskExtendibleHashTable<K, V, KC>::UnpinHeader() {
+  if (header_pinned_) {
+    bpm_->UnpinPage(header_page_id_, true);
+    header_pinned_ = false;
+  }
+}
+
+// template <typename K, typename V, typename KC>
+// void DiskExtendibleHashTable<K, V, KC>::UnpinDirectory() {
+//   if (directory_pinned_) {
+//     auto header_page = bpm_->FetchPage(header_page_id_);
+//     auto header_obj = reinterpret_cast<ExtendibleHTableHeaderPage *>(header_page->GetData());
+//     header_page->RLatch();
+//     uint32_t header_size = 1 << header_max_depth_;
+//     for (uint32_t i = 0; i < header_size; ++i) {
+//       auto dir_pid = header_obj->GetDirectoryPageIdSafe(i);
+//       if (dir_pid != INVALID_PAGE_ID) {
+//         bpm_->UnpinPage(dir_pid, true);
+//       }
+//     }
+//     header_page->RUnlatch();
+//     bpm_->UnpinPage(header_page_id_, true);
+//     bpm_->UnpinPage(header_page_id_, true);
+//     directory_pinned_ = false;
+//   }
+// }
 
 /*****************************************************************************
  * SEARCH
@@ -181,6 +211,10 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
       do {
         page_id_t split_pid;
         auto split_page = bpm_->NewPage(&split_pid);
+        if (split_page == nullptr) [[unlikely]] {  // NOLINT
+          UnpinHeader();
+          split_page = bpm_->NewPage(&split_pid);
+        }
         auto split_obj = reinterpret_cast<ExtendibleHTableBucketPage<K, V, KC> *>(split_page->GetData());
         split_obj->Init(bucket_max_size_);
         if ((hash_diff & bit_flag) != 0) {
@@ -227,6 +261,9 @@ void DiskExtendibleHashTable<K, V, KC>::NewDirectory(ExtendibleHTableHeaderPage 
   if (dir_pid == INVALID_PAGE_ID) [[likely]] {  // NOLINT
     dir_page = bpm_->NewPage(&dir_pid);
     bpm_->SetDirty(dir_page, true);
+    // if (directory_pinned_) {
+    //   bpm_->AddPinCount(dir_page, 1);
+    // }
     dir_obj = reinterpret_cast<ExtendibleHTableDirectoryPage *>(dir_page->GetData());
     dir_obj->Init(directory_max_depth_);
 

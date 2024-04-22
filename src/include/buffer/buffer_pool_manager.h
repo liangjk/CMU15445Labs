@@ -175,6 +175,8 @@ class BufferPoolManager {
 
   void SetDirty(Page *page, bool is_dirty) { page->is_dirty_ = is_dirty; }
 
+  void AddPinCount(Page *page, int pin_count) { page->pin_count_ += pin_count; }
+
  private:
   /** Number of pages in the buffer pool. */
   const size_t pool_size_;

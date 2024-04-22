@@ -93,12 +93,12 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   page_table_.erase(pg->GetPageId());
   page_id_t pid = AllocatePage();
   page_table_[pid] = fid;
-  latch_.unlock();
   if (pg->IsDirty()) {
     auto thread = WriteBack(pg);
     thread->detach();
     delete thread;
   }
+  latch_.unlock();
   pg->page_id_ = pid;
   pg->is_dirty_ = false;
   pg->pin_count_ = 1;
@@ -157,12 +157,12 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, AccessType access_type) -> 
   page_table_.erase(pg->GetPageId());
   page_table_[page_id] = fid;
   pg->pin_count_ = 1;
-  latch_.unlock();
   if (pg->IsDirty()) {
     auto thread = WriteBack(pg);
     thread->detach();
     delete thread;
   }
+  latch_.unlock();
   auto promise = disk_scheduler_->CreatePromise();
   auto future = promise.get_future();
   disk_scheduler_->Schedule({false, pg->GetData(), page_id, std::move(promise)});
