@@ -297,17 +297,11 @@ auto BufferPoolManager::FetchPageBasic(page_id_t page_id) -> BasicPageGuard {
 
 auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard {
   Page *pg = FetchPage(page_id);
-  if (pg != nullptr) {
-    pg->RLatch();
-  }
   return {this, pg};
 }
 
 auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard {
   Page *pg = FetchPage(page_id);
-  if (pg != nullptr) {
-    pg->WLatch();
-  }
   return {this, pg};
 }
 
