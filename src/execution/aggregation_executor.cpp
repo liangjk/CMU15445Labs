@@ -69,10 +69,7 @@ AggregationExecutor::AggregationExecutor(ExecutorContext *exec_ctx, const Aggreg
       child_executor_(std::move(child_executor)),
       aht_(plan->GetAggregates(), plan->GetAggregateTypes()),
       aht_iterator_({}),
-      schema_(plan->OutputSchema()) {}
-
-void AggregationExecutor::Init() {
-  aht_.Clear();
+      schema_(plan->OutputSchema()) {
   if (plan_->GetGroupBys().empty()) {
     aht_.MakeEmptyEntry();
   }
@@ -86,8 +83,9 @@ void AggregationExecutor::Init() {
       aht_.InsertCombine(agg_key, agg_val);
     }
   }
-  aht_iterator_ = aht_.Begin();
 }
+
+void AggregationExecutor::Init() { aht_iterator_ = aht_.Begin(); }
 
 auto AggregationExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
   if (aht_iterator_ == aht_.End()) {
