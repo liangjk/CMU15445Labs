@@ -10,9 +10,6 @@ namespace bustub {
 
 static auto GetColIdxAndValues(uint32_t &col_idx, const AbstractExpressionRef &expr)
     -> std::unique_ptr<std::vector<Value>> {
-  if (expr == nullptr) {
-    return nullptr;
-  }
   if (expr->GetReturnType().GetType() != TypeId::BOOLEAN) {
     return nullptr;
   }
@@ -40,9 +37,12 @@ static auto GetColIdxAndValues(uint32_t &col_idx, const AbstractExpressionRef &e
     const auto &rhs = logic_expr->GetChildAt(1);
     uint32_t lcol;
     uint32_t rcol;
-    auto lval = GetColIdxAndValues(lcol, lhs);
     auto rval = GetColIdxAndValues(rcol, rhs);
-    if (lval == nullptr || rval == nullptr || lcol != rcol) {
+    if (rval == nullptr) {
+      return nullptr;
+    }
+    auto lval = GetColIdxAndValues(lcol, lhs);
+    if (lval == nullptr || lcol != rcol) {
       return nullptr;
     }
     col_idx = lcol;
@@ -96,21 +96,25 @@ auto Optimizer::OptimizeSeqScanAsIndexScan(const bustub::AbstractPlanNodeRef &pl
 
   if (optimized_plan->GetType() == PlanType::SeqScan) {
     const auto &seq_plan = dynamic_cast<const SeqScanPlanNode &>(*optimized_plan);
-    uint32_t col_idx;
-    auto values = GetColIdxAndValues(col_idx, seq_plan.filter_predicate_);
-    if (values) {
+    if (seq_plan.filter_predicate_) {
       auto indexes = catalog_.GetTableIndexes(seq_plan.table_name_);
-      for (const auto &index : indexes) {
-        auto key_attr = index->index_->GetKeyAttrs();
-        if (key_attr.size() == 1 && key_attr[0] == col_idx) {
-          std::vector<AbstractExpressionRef> pred_keys;
-          auto vsize = values->size();
-          pred_keys.reserve(vsize);
-          for (size_t i = 0; i < vsize; ++i) {
-            pred_keys.push_back(std::make_shared<ConstantValueExpression>(values->at(i)));
+      if (!indexes.empty()) {
+        uint32_t col_idx;
+        auto values = GetColIdxAndValues(col_idx, seq_plan.filter_predicate_);
+        if (values) {
+          for (const auto &index : indexes) {
+            auto key_attr = index->index_->GetKeyAttrs();
+            if (key_attr.size() == 1 && key_attr[0] == col_idx) {
+              std::vector<AbstractExpressionRef> pred_keys;
+              auto vsize = values->size();
+              pred_keys.reserve(vsize);
+              for (size_t i = 0; i < vsize; ++i) {
+                pred_keys.push_back(std::make_shared<ConstantValueExpression>(values->at(i)));
+              }
+              return std::make_shared<IndexScanPlanNode>(seq_plan.output_schema_, seq_plan.table_oid_,
+                                                         index->index_oid_, seq_plan.filter_predicate_, pred_keys);
+            }
           }
-          return std::make_shared<IndexScanPlanNode>(seq_plan.output_schema_, seq_plan.table_oid_, index->index_oid_,
-                                                     seq_plan.filter_predicate_, pred_keys);
         }
       }
     }
