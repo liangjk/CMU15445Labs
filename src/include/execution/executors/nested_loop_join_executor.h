@@ -47,14 +47,24 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
    * @param[out] rid The next tuple RID produced, not used by nested loop join.
    * @return `true` if a tuple was produced, `false` if there are no more tuples.
    */
-  auto Next(Tuple *tuple, RID *rid) -> bool override;
+  auto Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool override;
 
   /** @return The output schema for the insert */
-  auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
+  auto GetOutputSchema() const -> const Schema & override { return out_schema_; };
 
  private:
   /** The NestedLoopJoin plan node to be executed. */
   const NestedLoopJoinPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> left_executor_;
+  std::unique_ptr<AbstractExecutor> right_executor_;
+  const Schema &left_schema_;
+  const Schema &right_schema_;
+  const Schema &out_schema_;
+  JoinType join_type_;
+  Tuple left_tuple_;
+  std::vector<Value> left_values_;
+  bool left_available_{false};
+  bool right_available_{false};
 };
 
 }  // namespace bustub

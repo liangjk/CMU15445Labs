@@ -20,7 +20,10 @@ UpdateExecutor::UpdateExecutor(ExecutorContext *exec_ctx, const UpdatePlanNode *
                                std::unique_ptr<AbstractExecutor> &&child_executor)
     : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {}
 
-void UpdateExecutor::Init() { child_executor_->Init(); }
+void UpdateExecutor::Init() {
+  child_executor_->Init();
+  called_ = false;
+}
 
 auto UpdateExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
   if (called_) {

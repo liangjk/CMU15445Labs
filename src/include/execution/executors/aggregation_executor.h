@@ -162,7 +162,7 @@ class AggregationExecutor : public AbstractExecutor {
   auto Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool override;
 
   /** @return The output schema for the aggregation */
-  auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
+  auto GetOutputSchema() const -> const Schema & override { return schema_; };
 
   /** Do not use or remove this function, otherwise you will get zero points. */
   auto GetChildExecutor() const -> const AbstractExecutor *;
@@ -198,5 +198,7 @@ class AggregationExecutor : public AbstractExecutor {
 
   /** Simple aggregation hash table iterator */
   SimpleAggregationHashTable::Iterator aht_iterator_;
+
+  const Schema &schema_;
 };
 }  // namespace bustub

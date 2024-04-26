@@ -14,12 +14,15 @@
 
 namespace bustub {
 IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanPlanNode *plan)
-    : AbstractExecutor(exec_ctx), plan_(plan) {}
-
-void IndexScanExecutor::Init() {
+    : AbstractExecutor(exec_ctx), plan_(plan) {
   auto catalog = exec_ctx_->GetCatalog();
   table_info_ = catalog->GetTable(plan_->table_oid_);
   index_info_ = catalog->GetIndex(plan_->GetIndexOid());
+}
+
+void IndexScanExecutor::Init() {
+  key_cursor_ = 0;
+  // rid_cursor_ = 0;
 }
 
 auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
