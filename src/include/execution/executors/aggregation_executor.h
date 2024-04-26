@@ -70,18 +70,9 @@ class SimpleAggregationHashTable {
    * @param[out] result The output aggregate value
    * @param input The input value
    */
-  void CombineAggregateValues(AggregateValue *result, const AggregateValue &input) {
-    for (uint32_t i = 0; i < agg_exprs_.size(); i++) {
-      switch (agg_types_[i]) {
-        case AggregationType::CountStarAggregate:
-        case AggregationType::CountAggregate:
-        case AggregationType::SumAggregate:
-        case AggregationType::MinAggregate:
-        case AggregationType::MaxAggregate:
-          break;
-      }
-    }
-  }
+  void CombineAggregateValues(AggregateValue *result, const AggregateValue &input);
+
+  void MakeEmptyEntry() { ht_[{}] = GenerateInitialAggregateValue(); }
 
   /**
    * Inserts a value into the hash table and then combines it with the current aggregation.
@@ -168,7 +159,7 @@ class AggregationExecutor : public AbstractExecutor {
    * @param[out] rid The next tuple RID produced by the aggregation
    * @return `true` if a tuple was produced, `false` if there are no more tuples
    */
-  auto Next(Tuple *tuple, RID *rid) -> bool override;
+  auto Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool override;
 
   /** @return The output schema for the aggregation */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
@@ -203,9 +194,9 @@ class AggregationExecutor : public AbstractExecutor {
   std::unique_ptr<AbstractExecutor> child_executor_;
 
   /** Simple aggregation hash table */
-  // TODO(Student): Uncomment SimpleAggregationHashTable aht_;
+  SimpleAggregationHashTable aht_;
 
   /** Simple aggregation hash table iterator */
-  // TODO(Student): Uncomment SimpleAggregationHashTable::Iterator aht_iterator_;
+  SimpleAggregationHashTable::Iterator aht_iterator_;
 };
 }  // namespace bustub
