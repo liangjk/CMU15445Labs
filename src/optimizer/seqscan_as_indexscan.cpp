@@ -9,7 +9,7 @@
 namespace bustub {
 
 static auto GetColIdxAndValues(uint32_t &col_idx, const AbstractExpressionRef &expr)
-    -> std::shared_ptr<std::vector<Value>> {
+    -> std::unique_ptr<std::vector<Value>> {
   if (expr == nullptr) {
     return nullptr;
   }
@@ -25,12 +25,12 @@ static auto GetColIdxAndValues(uint32_t &col_idx, const AbstractExpressionRef &e
     if (auto col_expr = dynamic_cast<const ColumnValueExpression *>(lhs.get())) {
       if (auto const_expr = dynamic_cast<const ConstantValueExpression *>(rhs.get())) {
         col_idx = col_expr->GetColIdx();
-        return std::make_shared<std::vector<Value>>(1, const_expr->val_);
+        return std::make_unique<std::vector<Value>>(1, const_expr->val_);
       }
     } else if (auto const_expr = dynamic_cast<const ConstantValueExpression *>(lhs.get())) {
       if (auto col_expr = dynamic_cast<const ColumnValueExpression *>(rhs.get())) {
         col_idx = col_expr->GetColIdx();
-        return std::make_shared<std::vector<Value>>(1, const_expr->val_);
+        return std::make_unique<std::vector<Value>>(1, const_expr->val_);
       }
     }
     return nullptr;
@@ -46,7 +46,7 @@ static auto GetColIdxAndValues(uint32_t &col_idx, const AbstractExpressionRef &e
       return nullptr;
     }
     col_idx = lcol;
-    auto ret = std::make_shared<std::vector<Value>>();
+    auto ret = std::make_unique<std::vector<Value>>();
     auto lsize = lval->size();
     auto rsize = rval->size();
     if (logic_expr->logic_type_ == LogicType::And) {
