@@ -44,5 +44,10 @@ class IndexScanExecutor : public AbstractExecutor {
  private:
   /** The index scan plan node to be executed. */
   const IndexScanPlanNode *plan_;
+  TableInfo *table_info_;
+  IndexInfo *index_info_;
+  size_t key_cursor_{0};
+  // std::vector<RID> rids_;
+  // size_t rid_cursor_{0};
 };
 }  // namespace bustub
