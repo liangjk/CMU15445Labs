@@ -36,8 +36,7 @@ SortExecutor::SortExecutor(ExecutorContext *exec_ctx, const SortPlanNode *plan,
     }
   }
 
-  TupleSorter sorter(order_bys);
-  std::sort(data_.begin(), data_.end(), sorter);
+  std::sort(data_.begin(), data_.end(), TupleSorter(order_bys));
 }
 
 void SortExecutor::Init() { iter_ = data_.cbegin(); }

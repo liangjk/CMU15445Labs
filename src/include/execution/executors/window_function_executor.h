@@ -13,10 +13,13 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
+#include "execution/executors/sort_executor.h"
+#include "execution/plans/aggregation_plan.h"
 #include "execution/plans/window_plan.h"
 #include "storage/table/tuple.h"
 
@@ -79,7 +82,7 @@ class WindowFunctionExecutor : public AbstractExecutor {
    * @param[out] rid The next tuple RID produced by the window aggregation
    * @return `true` if a tuple was produced, `false` if there are no more tuples
    */
-  auto Next(Tuple *tuple, RID *rid) -> bool override;
+  auto Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool override;
 
   /** @return The output schema for the window aggregation plan */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }
@@ -87,8 +90,31 @@ class WindowFunctionExecutor : public AbstractExecutor {
  private:
   /** The window aggregation plan node to be executed */
   const WindowFunctionPlanNode *plan_;
+  const Schema &child_schema_;
 
-  /** The child executor from which tuples are obtained */
-  std::unique_ptr<AbstractExecutor> child_executor_;
+  std::vector<TupleToSort> data_;
+  std::vector<TupleToSort>::const_iterator iter_;
+
+  std::unordered_map<uint32_t, std::unordered_map<AggregateKey, Value>> hts_;
+
+  bool sort_{false};
+
+  auto MakeAggregateKey(const Tuple *tuple, const std::vector<AbstractExpressionRef> &exprs) -> AggregateKey {
+    std::vector<Value> keys;
+    keys.reserve(exprs.size());
+    for (const auto &expr : exprs) {
+      keys.emplace_back(expr->Evaluate(tuple, child_schema_));
+    }
+    return {keys};
+  }
+
+  auto CalcAndInsert(const TupleToSort &tuple, std::unordered_map<AggregateKey, Value> &ht,
+                     const WindowFunctionPlanNode::WindowFunction &func) -> Value;
+
+  struct RankValue {
+    int current_;
+    int count_;
+    std::vector<Value> const *last_order_;
+  };
 };
 }  // namespace bustub
