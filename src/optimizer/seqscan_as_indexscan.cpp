@@ -10,9 +10,9 @@ namespace bustub {
 
 static auto GetColIdxAndValues(uint32_t &col_idx, const AbstractExpressionRef &expr)
     -> std::unique_ptr<std::vector<Value>> {
-  if (expr->GetReturnType().GetType() != TypeId::BOOLEAN) {
-    return nullptr;
-  }
+  // if (expr->GetReturnType().GetType() != TypeId::BOOLEAN) {
+  //   return nullptr;
+  // }
   if (auto comp_expr = dynamic_cast<const ComparisonExpression *>(expr.get())) {
     if (comp_expr->comp_type_ != ComparisonType::Equal) {
       return nullptr;
@@ -33,14 +33,14 @@ static auto GetColIdxAndValues(uint32_t &col_idx, const AbstractExpressionRef &e
     return nullptr;
   }
   if (auto logic_expr = dynamic_cast<const LogicExpression *>(expr.get())) {
-    const auto &lhs = logic_expr->GetChildAt(0);
     const auto &rhs = logic_expr->GetChildAt(1);
-    uint32_t lcol;
     uint32_t rcol;
     auto rval = GetColIdxAndValues(rcol, rhs);
     if (rval == nullptr) {
       return nullptr;
     }
+    const auto &lhs = logic_expr->GetChildAt(0);
+    uint32_t lcol;
     auto lval = GetColIdxAndValues(lcol, lhs);
     if (lval == nullptr || lcol != rcol) {
       return nullptr;
