@@ -13,11 +13,13 @@
 #pragma once
 
 #include <memory>
+#include <queue>
 #include <utility>
 #include <vector>
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
+#include "execution/executors/sort_executor.h"
 #include "execution/plans/seq_scan_plan.h"
 #include "execution/plans/topn_plan.h"
 #include "storage/table/tuple.h"
@@ -51,9 +53,7 @@ class TopNExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }
 
   /** Sets new child executor (for testing only) */
-  void SetChildExecutor(std::unique_ptr<AbstractExecutor> &&child_executor) {
-    child_executor_ = std::move(child_executor);
-  }
+  void SetChildExecutor(std::unique_ptr<AbstractExecutor> &&child_executor);
 
   /** @return The size of top_entries_ container, which will be called on each child_executor->Next(). */
   auto GetNumInHeap() -> size_t;
@@ -63,5 +63,8 @@ class TopNExecutor : public AbstractExecutor {
   const TopNPlanNode *plan_;
   /** The child executor from which tuples are obtained */
   std::unique_ptr<AbstractExecutor> child_executor_;
+  std::vector<TupleToSort> data_;
+  std::vector<TupleToSort>::const_reverse_iterator iter_;
+  size_t heap_cnt_{0};
 };
 }  // namespace bustub

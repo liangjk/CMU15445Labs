@@ -13,6 +13,7 @@
 #pragma once
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "execution/executor_context.h"
@@ -22,6 +23,25 @@
 #include "storage/table/tuple.h"
 
 namespace bustub {
+
+struct TupleToSort {
+  TupleToSort(Tuple &tuple, const RID &rid) : tuple_(std::move(tuple)), rid_(rid) {}
+  TupleToSort(Tuple &tuple, const RID &rid, std::vector<Value> &values)
+      : tuple_(std::move(tuple)), rid_(rid), values_(std::move(values)) {}
+  Tuple tuple_;
+  RID rid_;
+  std::vector<Value> values_;
+};
+
+class TupleSorter {
+ public:
+  explicit TupleSorter(const std::vector<std::pair<OrderByType, AbstractExpressionRef>> &order_bys)
+      : order_bys_(order_bys) {}
+  auto operator()(const TupleToSort &a, const TupleToSort &b) const -> bool;
+
+ private:
+  const std::vector<std::pair<OrderByType, AbstractExpressionRef>> &order_bys_;
+};
 
 /**
  * The SortExecutor executor executes a sort.
@@ -52,5 +72,8 @@ class SortExecutor : public AbstractExecutor {
  private:
   /** The sort plan node to be executed */
   const SortPlanNode *plan_;
+
+  std::vector<TupleToSort> data_;
+  std::vector<TupleToSort>::const_iterator iter_;
 };
 }  // namespace bustub
