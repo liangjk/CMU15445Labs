@@ -10,6 +10,8 @@ namespace bustub {
 auto Optimizer::OptimizeCustom(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
   auto p = plan;
   p = OptimizeMergeProjection(p);
+  p = OptimizeColumnPruning(p);
+  p = OptimizeProjectOnAggregation(p);
   p = OptimizeMergeFilterNLJ(p);
   p = OptimizeNLJAsHashJoin(p);
   p = OptimizeOrderByAsIndexScan(p);

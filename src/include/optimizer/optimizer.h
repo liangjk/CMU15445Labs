@@ -100,6 +100,8 @@ class Optimizer {
    */
   auto OptimizeColumnPruning(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
 
+  auto OptimizeProjectOnAggregation(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+
   /**
    * @brief optimize sort + limit as top N
    */
