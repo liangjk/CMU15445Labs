@@ -96,7 +96,6 @@ class HashJoinExecutor : public AbstractExecutor {
   const Schema &left_schema_;
   const Schema &right_schema_;
   const Schema &out_schema_;
-  const std::vector<AbstractExpressionRef> &left_expressions_;
 
   std::unordered_multimap<HashJoinKey, HashJoinValue> ht_{};
   std::pair<std::unordered_multimap<HashJoinKey, HashJoinValue>::const_iterator,
@@ -106,7 +105,10 @@ class HashJoinExecutor : public AbstractExecutor {
   JoinType join_type_;
   HashJoinValue right_null_{};
 
-  HashJoinValue left_values_{};
+  std::vector<HashJoinKey> left_keys_;
+  std::vector<HashJoinValue> left_values_;
+  size_t left_cursor_{0};
+
   bool left_available_{false};
   bool right_available_{false};
 

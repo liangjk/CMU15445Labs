@@ -66,6 +66,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
   std::vector<Value> left_values_;
   bool left_available_{false};
   bool right_available_{false};
+  bool predicate_false_{false};
 };
 
 }  // namespace bustub

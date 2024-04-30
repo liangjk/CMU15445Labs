@@ -10,6 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <unordered_set>
+
 #include "execution/executors/hash_join_executor.h"
 #include "type/value_factory.h"
 
@@ -25,16 +27,27 @@ HashJoinExecutor::HashJoinExecutor(ExecutorContext *exec_ctx, const HashJoinPlan
       left_schema_(left_executor_->GetOutputSchema()),
       right_schema_(right_executor_->GetOutputSchema()),
       out_schema_(plan->OutputSchema()),
-      left_expressions_(plan->LeftJoinKeyExpressions()),
       ht_iter_{ht_.cend(), ht_.cend()},
       join_type_(plan->GetJoinType()) {
+  left_executor_->Init();
+  Tuple tuple;
+  RID rid;
+
+  const auto &left_expressions = plan_->LeftJoinKeyExpressions();
+  std::unordered_set<HashJoinKey> left_set;
+  while (left_executor_->Next(&tuple, &rid)) {
+    left_keys_.emplace_back(MakeHashJoinKey(&tuple, left_expressions, left_schema_));
+    left_set.insert(left_keys_.back());
+    left_values_.emplace_back(MakeHashJoinValue(&tuple, &left_schema_));
+  }
+
   right_executor_->Init();
   const auto &right_expression = plan_->RightJoinKeyExpressions();
-  Tuple right_tuple;
-  RID right_rid;
-  while (right_executor_->Next(&right_tuple, &right_rid)) {
-    ht_.insert({MakeHashJoinKey(&right_tuple, right_expression, right_schema_),
-                MakeHashJoinValue(&right_tuple, &right_schema_)});
+  while (right_executor_->Next(&tuple, &rid)) {
+    auto right_key = MakeHashJoinKey(&tuple, right_expression, right_schema_);
+    if (left_set.find(right_key) != left_set.end()) {
+      ht_.insert({std::move(right_key), MakeHashJoinValue(&tuple, &right_schema_)});
+    }
   }
   if (join_type_ == JoinType::LEFT) {
     auto &values = right_null_.values_;
@@ -47,26 +60,23 @@ HashJoinExecutor::HashJoinExecutor(ExecutorContext *exec_ctx, const HashJoinPlan
 }
 
 void HashJoinExecutor::Init() {
-  left_executor_->Init();
+  left_cursor_ = 0;
   left_available_ = false;
 }
 
 auto HashJoinExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
 beginning:
   if (!left_available_) {
-    Tuple left_tuple;
-    RID left_rid;
-    if (left_executor_->Next(&left_tuple, &left_rid)) {
+    if (left_cursor_ < left_keys_.size()) {
       left_available_ = true;
       right_available_ = false;
-      left_values_ = MakeHashJoinValue(&left_tuple, &left_schema_);
-      ht_iter_ = ht_.equal_range(MakeHashJoinKey(&left_tuple, left_expressions_, left_schema_));
+      ht_iter_ = ht_.equal_range(left_keys_[left_cursor_]);
     } else {
       return false;
     }
   }
   if (ht_iter_.first != ht_iter_.second) {
-    std::vector<Value> out_values(left_values_.values_);
+    std::vector<Value> out_values(left_values_[left_cursor_].values_);
     const auto &right_values = (ht_iter_.first++)->second.values_;
     out_values.reserve(out_values.size() + right_values.size());
     out_values.insert(out_values.end(), right_values.begin(), right_values.end());
@@ -76,13 +86,14 @@ beginning:
   }
   left_available_ = false;
   if (!right_available_ && join_type_ == JoinType::LEFT) {
-    std::vector<Value> out_values(left_values_.values_);
+    std::vector<Value> out_values(left_values_[left_cursor_++].values_);
     const auto &right_values = right_null_.values_;
     out_values.reserve(out_values.size() + right_values.size());
     out_values.insert(out_values.end(), right_values.begin(), right_values.end());
     *tuple = {out_values, &out_schema_};
     return true;
   }
+  ++left_cursor_;
   goto beginning;
 }
 

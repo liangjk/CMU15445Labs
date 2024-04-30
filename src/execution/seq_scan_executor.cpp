@@ -11,11 +11,20 @@
 //===----------------------------------------------------------------------===//
 
 #include "execution/executors/seq_scan_executor.h"
+#include "optimizer/optimizer_internal.h"
 
 namespace bustub {
 
 SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan)
     : AbstractExecutor(exec_ctx), plan_(plan) {
+  const auto &filter = plan_->filter_predicate_;
+  if (filter && IsPredicateConstant(filter)) {
+    auto value = filter->Evaluate(nullptr, Schema({}));
+    if (!value.IsNull() && !value.GetAs<bool>()) {
+      predicate_false_ = true;
+      return;
+    }
+  }
   auto catalog = exec_ctx_->GetCatalog();
   auto oid = plan_->GetTableOid();
   table_info_ = catalog->GetTable(oid);
@@ -24,6 +33,9 @@ SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNod
 void SeqScanExecutor::Init() { iter_.emplace(table_info_->table_->MakeIterator()); }
 
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+  if (predicate_false_) {
+    return false;
+  }
   const auto &filter = plan_->filter_predicate_;
   while (!iter_->IsEnd()) {
     auto tuple_with_meta = iter_->GetTuple();

@@ -57,5 +57,7 @@ class FilterExecutor : public AbstractExecutor {
 
   /** The child executor from which tuples are obtained */
   std::unique_ptr<AbstractExecutor> child_executor_;
+
+  bool predicate_false_{false};
 };
 }  // namespace bustub

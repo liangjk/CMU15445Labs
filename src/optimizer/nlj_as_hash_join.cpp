@@ -210,8 +210,14 @@ auto Optimizer::OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> Abstra
         left_child = OptimizeNLJAsHashJoin(left_child);
         right_child = OptimizeNLJAsHashJoin(right_child);
 
-        return std::make_shared<HashJoinPlanNode>(nlj_plan.output_schema_, left_child, right_child,
-                                                  std::move(hash_left), std::move(hash_right), nlj_plan.join_type_);
+        if (!hash_left.empty()) {
+          return std::make_shared<HashJoinPlanNode>(nlj_plan.output_schema_, std::move(left_child),
+                                                    std::move(right_child), std::move(hash_left), std::move(hash_right),
+                                                    nlj_plan.join_type_);
+        }
+        return std::make_shared<NestedLoopJoinPlanNode>(
+            nlj_plan.output_schema_, std::move(left_child), std::move(right_child),
+            std::make_shared<ConstantValueExpression>(ValueFactory::GetBooleanValue(true)), nlj_plan.join_type_);
       }
     }
   }

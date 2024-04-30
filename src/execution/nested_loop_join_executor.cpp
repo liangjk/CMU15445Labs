@@ -13,6 +13,7 @@
 #include "execution/executors/nested_loop_join_executor.h"
 #include "binder/table_ref/bound_join_ref.h"
 #include "common/exception.h"
+#include "optimizer/optimizer_internal.h"
 #include "type/value_factory.h"
 
 namespace bustub {
@@ -28,6 +29,14 @@ NestedLoopJoinExecutor::NestedLoopJoinExecutor(ExecutorContext *exec_ctx, const 
       right_schema_(right_executor_->GetOutputSchema()),
       out_schema_(plan->OutputSchema()),
       join_type_(plan->GetJoinType()) {
+  const auto &filter = plan_->predicate_;
+  if (IsPredicateConstant(filter)) {
+    auto value = filter->Evaluate(nullptr, Schema({}));
+    if (!value.IsNull() && !value.GetAs<bool>()) {
+      predicate_false_ = true;
+      return;
+    }
+  }
   left_values_.reserve(left_schema_.GetColumnCount());
 }
 
@@ -37,6 +46,9 @@ void NestedLoopJoinExecutor::Init() {
 }
 
 auto NestedLoopJoinExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
+  if (predicate_false_) {
+    return false;
+  }
 beginning:
   RID child_rid;
   if (!left_available_) {

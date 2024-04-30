@@ -52,5 +52,6 @@ class SeqScanExecutor : public AbstractExecutor {
   const SeqScanPlanNode *plan_;
   TableInfo *table_info_{nullptr};
   std::optional<TableIterator> iter_{std::nullopt};
+  bool predicate_false_{false};
 };
 }  // namespace bustub
