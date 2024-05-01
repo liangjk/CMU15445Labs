@@ -19,7 +19,9 @@ FilterExecutor::FilterExecutor(ExecutorContext *exec_ctx, const FilterPlanNode *
 
 void FilterExecutor::Init() {
   // Initialize the child executor
-  child_executor_->Init();
+  if (!predicate_false_) {
+    child_executor_->Init();
+  }
 }
 
 auto FilterExecutor::Next(Tuple *tuple, RID *rid) -> bool {

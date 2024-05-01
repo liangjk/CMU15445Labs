@@ -30,7 +30,11 @@ SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNod
   table_info_ = catalog->GetTable(oid);
 }
 
-void SeqScanExecutor::Init() { iter_.emplace(table_info_->table_->MakeIterator()); }
+void SeqScanExecutor::Init() {
+  if (!predicate_false_) {
+    iter_.emplace(table_info_->table_->MakeIterator());
+  }
+}
 
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (predicate_false_) {

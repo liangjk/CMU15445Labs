@@ -41,8 +41,10 @@ NestedLoopJoinExecutor::NestedLoopJoinExecutor(ExecutorContext *exec_ctx, const 
 }
 
 void NestedLoopJoinExecutor::Init() {
-  left_executor_->Init();
-  left_available_ = false;
+  if (!predicate_false_) {
+    left_executor_->Init();
+    left_available_ = false;
+  }
 }
 
 auto NestedLoopJoinExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
