@@ -39,8 +39,8 @@ class SimpleAggregationHashTable {
    * @param agg_types the types of aggregations
    */
   SimpleAggregationHashTable(const std::vector<AbstractExpressionRef> &agg_exprs,
-                             const std::vector<AggregationType> &agg_types, std::vector<size_t> *dup)
-      : agg_exprs_{agg_exprs}, agg_types_{agg_types}, dup_(dup) {}
+                             const std::vector<AggregationType> &agg_types)
+      : agg_exprs_{agg_exprs}, agg_types_{agg_types} {}
 
   /** @return The initial aggregate value for this aggregation executor */
   auto GenerateInitialAggregateValue() -> AggregateValue {
@@ -133,8 +133,6 @@ class SimpleAggregationHashTable {
   const std::vector<AbstractExpressionRef> &agg_exprs_;
   /** The types of aggregations that we have */
   const std::vector<AggregationType> &agg_types_;
-
-  std::vector<size_t> *dup_;
 };
 
 /**
@@ -180,15 +178,10 @@ class AggregationExecutor : public AbstractExecutor {
   }
 
   /** @return The tuple as an AggregateValue */
-  auto MakeAggregateValue(const Tuple *tuple, const std::vector<AbstractExpressionRef> &aggr_exprs) -> AggregateValue {
+  auto MakeAggregateValue(const Tuple *tuple) -> AggregateValue {
     std::vector<Value> vals;
-    vals.reserve(aggr_exprs.size());
-    for (size_t i = 0; i < aggr_exprs.size(); ++i) {
-      if (dup_[i] != static_cast<size_t>(-1)) {
-        vals.emplace_back();
-      } else {
-        vals.emplace_back(aggr_exprs[i]->Evaluate(tuple, child_executor_->GetOutputSchema()));
-      }
+    for (const auto &expr : plan_->GetAggregates()) {
+      vals.emplace_back(expr->Evaluate(tuple, child_executor_->GetOutputSchema()));
     }
     return {vals};
   }
@@ -205,8 +198,6 @@ class AggregationExecutor : public AbstractExecutor {
 
   /** Simple aggregation hash table iterator */
   SimpleAggregationHashTable::Iterator aht_iterator_;
-
-  std::vector<size_t> dup_;
 
   const Schema &schema_;
 };

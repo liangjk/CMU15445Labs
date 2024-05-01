@@ -98,12 +98,39 @@ auto Optimizer::OptimizeProjectOnAggregation(const AbstractPlanNodeRef &plan) ->
         std::vector<AggregationType> new_aggtypes;
         new_aggtypes.reserve(sz);
 
+        std::vector<uint32_t> dup_idx(sz, static_cast<uint32_t>(-1));
+        std::vector<AggregationType> dup_type(sz);
+        std::vector<Column const *> dup_col(sz);
+
         for (auto old_index : relevant) {
-          new_aggexprs.emplace_back(aggre_plan.aggregates_[old_index - gbsz]);
-          new_aggtypes.emplace_back(aggre_plan.agg_types_[old_index - gbsz]);
-          auto &col = old_schema.GetColumn(old_index);
-          new_columns.emplace_back(col);
-          new_proj[old_index] = std::make_shared<ColumnValueExpression>(0, new_idx++, col);
+          if (auto col_expr =
+                  dynamic_cast<const ColumnValueExpression *>(aggre_plan.aggregates_[old_index - gbsz].get())) {
+            auto col_idx = col_expr->GetColIdx();
+            bool duplicated = false;
+            for (size_t i = 0; i + gbsz < new_idx; ++i) {
+              if (dup_idx[i] == col_idx && dup_type[i] == aggre_plan.agg_types_[old_index - gbsz]) {
+                new_proj[old_index] = std::make_shared<ColumnValueExpression>(0, i + gbsz, *dup_col[i]);
+                duplicated = true;
+                break;
+              }
+            }
+            if (!duplicated) {
+              dup_idx[new_idx - gbsz] = col_idx;
+              new_aggexprs.emplace_back(aggre_plan.aggregates_[old_index - gbsz]);
+              new_aggtypes.emplace_back(aggre_plan.agg_types_[old_index - gbsz]);
+              dup_type[new_idx - gbsz] = aggre_plan.agg_types_[old_index - gbsz];
+              auto &col = old_schema.GetColumn(old_index);
+              new_columns.emplace_back(col);
+              dup_col[new_idx - gbsz] = &col;
+              new_proj[old_index] = std::make_shared<ColumnValueExpression>(0, new_idx++, col);
+            }
+          } else {
+            new_aggexprs.emplace_back(aggre_plan.aggregates_[old_index - gbsz]);
+            new_aggtypes.emplace_back(aggre_plan.agg_types_[old_index - gbsz]);
+            auto &col = old_schema.GetColumn(old_index);
+            new_columns.emplace_back(col);
+            new_proj[old_index] = std::make_shared<ColumnValueExpression>(0, new_idx++, col);
+          }
         }
 
         auto new_child = std::make_shared<AggregationPlanNode>(std::make_shared<Schema>(std::move(new_columns)),
