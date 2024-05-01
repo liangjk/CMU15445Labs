@@ -20,8 +20,8 @@
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
-#include "execution/executors/aggregation_executor.h"
 #include "execution/executors/sort_executor.h"
+#include "execution/plans/aggregation_plan.h"
 #include "execution/plans/topn_per_group_plan.h"
 #include "storage/table/tuple.h"
 

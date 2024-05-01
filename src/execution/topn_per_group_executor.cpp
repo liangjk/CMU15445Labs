@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "execution/executors/topn_per_group_executor.h"
+#include "type/value_factory.h"
 
 namespace bustub {
 
