@@ -25,7 +25,7 @@ void TopNExecutor::SetChildExecutor(std::unique_ptr<AbstractExecutor> &&child_ex
     std::vector<Value> sort;
     sort.reserve(exprs);
     for (size_t i = 0; i < exprs; ++i) {
-      sort.push_back(order_bys[i].second->Evaluate(&tuple, schema));
+      sort.emplace_back(order_bys[i].second->Evaluate(&tuple, schema));
     }
     heap.emplace(tuple, rid, sort);
     if (heap_cnt_ < n) {

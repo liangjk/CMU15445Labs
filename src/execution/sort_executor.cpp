@@ -16,6 +16,16 @@ auto TupleSorter::operator()(const TupleToSort &a, const TupleToSort &b) const -
   return false;
 }
 
+auto TupleSorter::Equal(const TupleToSort &a, const TupleToSort &b) const -> bool {
+  auto sz = order_bys_.size();
+  for (size_t i = 0; i < sz; ++i) {
+    if (a.values_[i].CompareEquals(b.values_[i]) != CmpBool::CmpTrue) {
+      return false;
+    }
+  }
+  return true;
+}
+
 SortExecutor::SortExecutor(ExecutorContext *exec_ctx, const SortPlanNode *plan,
                            std::unique_ptr<AbstractExecutor> &&child_executor)
     : AbstractExecutor(exec_ctx), plan_(plan) {

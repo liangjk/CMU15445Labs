@@ -26,7 +26,7 @@ auto ProjectionExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   std::vector<Value> values{};
   values.reserve(GetOutputSchema().GetColumnCount());
   for (const auto &expr : plan_->GetExpressions()) {
-    values.push_back(expr->Evaluate(&child_tuple, child_executor_->GetOutputSchema()));
+    values.emplace_back(expr->Evaluate(&child_tuple, child_executor_->GetOutputSchema()));
   }
 
   *tuple = Tuple{values, &GetOutputSchema()};

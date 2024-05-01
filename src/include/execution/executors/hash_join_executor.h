@@ -128,7 +128,7 @@ class HashJoinExecutor : public AbstractExecutor {
     auto sz = schema->GetColumnCount();
     values.reserve(sz);
     for (size_t i = 0; i < sz; ++i) {
-      values.push_back(tuple->GetValue(schema, i));
+      values.emplace_back(tuple->GetValue(schema, i));
     }
     return {values};
   }

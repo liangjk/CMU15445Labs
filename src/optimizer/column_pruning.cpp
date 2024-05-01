@@ -90,7 +90,7 @@ auto Optimizer::OptimizeProjectOnAggregation(const AbstractPlanNodeRef &plan) ->
         for (size_t i = 0; i < gbsz; ++i) {
           auto &col = old_schema.GetColumn(i);
           new_columns.emplace_back(col);
-          new_proj[i] = std::make_shared<ColumnValueExpression>(0, new_idx++, Column{col});
+          new_proj[i] = std::make_shared<ColumnValueExpression>(0, new_idx++, col);
         }
 
         std::vector<AbstractExpressionRef> new_aggexprs;
@@ -103,13 +103,12 @@ auto Optimizer::OptimizeProjectOnAggregation(const AbstractPlanNodeRef &plan) ->
           new_aggtypes.emplace_back(aggre_plan.agg_types_[old_index - gbsz]);
           auto &col = old_schema.GetColumn(old_index);
           new_columns.emplace_back(col);
-          new_proj[old_index] = std::make_shared<ColumnValueExpression>(0, new_idx++, Column{col});
+          new_proj[old_index] = std::make_shared<ColumnValueExpression>(0, new_idx++, col);
         }
 
-        auto new_child = std::make_shared<AggregationPlanNode>(
-            std::make_shared<Schema>(std::move(new_columns)), aggre_plan.GetChildAt(0),
-            std::vector<AbstractExpressionRef>{aggre_plan.group_bys_}, std::move(new_aggexprs),
-            std::move(new_aggtypes));
+        auto new_child = std::make_shared<AggregationPlanNode>(std::make_shared<Schema>(std::move(new_columns)),
+                                                               aggre_plan.GetChildAt(0), aggre_plan.group_bys_,
+                                                               std::move(new_aggexprs), std::move(new_aggtypes));
         std::vector<AbstractExpressionRef> new_projexprs;
         new_projexprs.reserve(old_projexprs.size());
         for (const auto &expr : old_projexprs) {

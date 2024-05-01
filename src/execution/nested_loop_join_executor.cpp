@@ -74,7 +74,7 @@ beginning:
       auto sz = right_schema_.GetColumnCount();
       out_values.reserve(left_values_.size() + sz);
       for (size_t i = 0; i < sz; ++i) {
-        out_values.push_back(right_tuple.GetValue(&right_schema_, i));
+        out_values.emplace_back(right_tuple.GetValue(&right_schema_, i));
       }
       *tuple = {out_values, &out_schema_};
       return true;
@@ -86,7 +86,7 @@ beginning:
     auto sz = right_schema_.GetColumnCount();
     out_values.reserve(left_values_.size() + sz);
     for (size_t i = 0; i < sz; ++i) {
-      out_values.push_back(ValueFactory::GetNullValueByType(right_schema_.GetColumn(i).GetType()));
+      out_values.emplace_back(ValueFactory::GetNullValueByType(right_schema_.GetColumn(i).GetType()));
     }
     *tuple = {out_values, &out_schema_};
     return true;

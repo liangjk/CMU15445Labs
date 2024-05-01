@@ -102,6 +102,8 @@ class Optimizer {
 
   auto OptimizeProjectOnAggregation(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
 
+  auto OptimizeWindowFuncToTopNGroup(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+
   /**
    * @brief optimize sort + limit as top N
    */

@@ -38,6 +38,7 @@ class TupleSorter {
   explicit TupleSorter(const std::vector<std::pair<OrderByType, AbstractExpressionRef>> &order_bys)
       : order_bys_(order_bys) {}
   auto operator()(const TupleToSort &a, const TupleToSort &b) const -> bool;
+  auto Equal(const TupleToSort &a, const TupleToSort &b) const -> bool;
 
  private:
   const std::vector<std::pair<OrderByType, AbstractExpressionRef>> &order_bys_;
