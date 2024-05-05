@@ -14,6 +14,7 @@
 
 #include <vector>
 
+#include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/seq_scan_plan.h"
@@ -53,5 +54,7 @@ class SeqScanExecutor : public AbstractExecutor {
   TableInfo *table_info_{nullptr};
   std::optional<TableIterator> iter_{std::nullopt};
   bool predicate_false_{false};
+  Transaction *txn_{nullptr};
+  TransactionManager *txn_mgr_{nullptr};
 };
 }  // namespace bustub

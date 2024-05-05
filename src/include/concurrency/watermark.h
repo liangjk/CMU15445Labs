@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <queue>
 #include <unordered_map>
 #include <vector>
@@ -38,7 +39,7 @@ class Watermark {
   timestamp_t watermark_;
 
   std::unordered_map<timestamp_t, int> current_reads_;
-  std::priority_queue<timestamp_t, std::vector<timestamp_t>, std::greater<timestamp_t>> in_map_;
+  std::priority_queue<timestamp_t, std::vector<timestamp_t>, std::greater<>> in_map_;
 };
 
 };  // namespace bustub
