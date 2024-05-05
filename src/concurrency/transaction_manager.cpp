@@ -55,6 +55,7 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
   std::unique_lock<std::mutex> commit_lck(commit_mutex_);
 
   // TODO(fall2023): acquire commit ts!
+  auto commit_ts = last_commit_ts_ + 1;
 
   if (txn->state_ != TransactionState::RUNNING) {
     throw Exception("txn not in running state");
@@ -69,11 +70,21 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
   }
 
   // TODO(fall2023): Implement the commit logic!
+  const auto &write_set = txn->GetWriteSets();
+  for (const auto &pair : write_set) {
+    auto table = catalog_->GetTable(pair.first);
+    for (const auto &rid : pair.second) {
+      auto meta = table->table_->GetTupleMeta(rid);
+      meta.ts_ = commit_ts;
+      table->table_->UpdateTupleMeta(meta, rid);
+    }
+  }
 
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
 
   // TODO(fall2023): set commit timestamp + update last committed timestamp here.
-  txn->commit_ts_.store(++last_commit_ts_);
+  txn->commit_ts_.store(commit_ts);
+  last_commit_ts_.store(commit_ts);
 
   txn->state_ = TransactionState::COMMITTED;
   running_txns_.UpdateCommitTs(txn->commit_ts_);

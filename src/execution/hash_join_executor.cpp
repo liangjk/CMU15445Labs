@@ -81,7 +81,7 @@ beginning:
     out_values.reserve(out_values.size() + right_values.size());
     out_values.insert(out_values.end(), right_values.begin(), right_values.end());
     right_available_ = true;
-    *tuple = {out_values, &out_schema_};
+    *tuple = {std::move(out_values), &out_schema_};
     return true;
   }
   left_available_ = false;
@@ -90,7 +90,7 @@ beginning:
     const auto &right_values = right_null_.values_;
     out_values.reserve(out_values.size() + right_values.size());
     out_values.insert(out_values.end(), right_values.begin(), right_values.end());
-    *tuple = {out_values, &out_schema_};
+    *tuple = {std::move(out_values), &out_schema_};
     return true;
   }
   ++left_cursor_;

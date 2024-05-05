@@ -78,7 +78,7 @@ beginning:
       for (size_t i = 0; i < sz; ++i) {
         out_values.emplace_back(right_tuple.GetValue(&right_schema_, i));
       }
-      *tuple = {out_values, &out_schema_};
+      *tuple = {std::move(out_values), &out_schema_};
       return true;
     }
   }
@@ -90,7 +90,7 @@ beginning:
     for (size_t i = 0; i < sz; ++i) {
       out_values.emplace_back(ValueFactory::GetNullValueByType(right_schema_.GetColumn(i).GetType()));
     }
-    *tuple = {out_values, &out_schema_};
+    *tuple = {std::move(out_values), &out_schema_};
     return true;
   }
   goto beginning;

@@ -41,7 +41,7 @@ auto InsertExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
   RID child_rid;
   auto lock_mgr = exec_ctx_->GetLockManager();
   auto txn = exec_ctx_->GetTransaction();
-  TupleMeta meta{0, false};
+  TupleMeta meta{txn->GetTransactionTempTs(), false};
 
   const auto &table_ptr = table->table_;
   const auto &schema = table->schema_;
@@ -50,6 +50,7 @@ auto InsertExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
     auto insert_rid = table_ptr->InsertTuple(meta, insert_data, lock_mgr, txn, oid);
     if (insert_rid != std::nullopt) {
       ++inserted;
+      txn->AppendWriteSet(oid, *insert_rid);
       for (const auto &index : indexes) {
         index->index_->InsertEntry(insert_data.KeyFromTuple(schema, index->key_schema_, index->index_->GetKeyAttrs()),
                                    *insert_rid, txn);

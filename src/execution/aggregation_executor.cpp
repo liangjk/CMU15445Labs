@@ -97,7 +97,7 @@ auto AggregationExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool 
   out_values.reserve(key.size() + val.size());
   out_values.insert(out_values.end(), key.begin(), key.end());
   out_values.insert(out_values.end(), val.begin(), val.end());
-  *tuple = {out_values, &schema_};
+  *tuple = {std::move(out_values), &schema_};
   ++aht_iterator_;
   return true;
 }

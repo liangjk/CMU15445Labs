@@ -88,7 +88,7 @@ TopNPerGroupExecutor::TopNPerGroupExecutor(ExecutorContext *exec_ctx, const TopN
           out_values.emplace_back(ValueFactory::GetIntegerValue(rank));
         }
       }
-      data_.emplace_back(out_values, &out_schema);
+      data_.emplace_back(std::move(out_values), &out_schema);
     }
   }
 }

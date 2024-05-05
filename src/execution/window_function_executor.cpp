@@ -51,7 +51,7 @@ WindowFunctionExecutor::WindowFunctionExecutor(ExecutorContext *exec_ctx, const 
         new_values[i] = hts_[i].at(MakeAggregateKey(&data.tuple_, plan_->window_functions_.at(i).partition_by_));
       }
     }
-    data.tuple_ = {new_values, plan_->output_schema_.get()};
+    data.tuple_ = {std::move(new_values), plan_->output_schema_.get()};
   }
 }
 
@@ -79,7 +79,7 @@ auto WindowFunctionExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bo
         out_values[i] = CalcAndInsert(*iter_, hts_[i], plan_->window_functions_.at(i));
       }
     }
-    *tuple = {out_values, plan_->output_schema_.get()};
+    *tuple = {std::move(out_values), plan_->output_schema_.get()};
   } else {
     *tuple = iter_->tuple_;
   }

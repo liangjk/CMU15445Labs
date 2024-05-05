@@ -96,6 +96,13 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     if (found) {
       auto old_tuple = ReconstructTuple(&plan_->OutputSchema(), tuple_with_meta.second, tuple_with_meta.first, logs);
       if (old_tuple.has_value()) {
+        if (filter) {
+          auto value = filter->Evaluate(&old_tuple.value(), table_info_->schema_);
+          if (value.IsNull() || !value.GetAs<bool>()) {
+            ++*iter_;
+            continue;
+          }
+        }
         *tuple = *old_tuple;
         *rid = iter_->GetRID();
         ++*iter_;
