@@ -59,7 +59,7 @@ auto UpdateExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
   const auto &exprs = plan_->target_expressions_;
   TupleMeta new_meta{txn->GetTransactionTempTs(), false};
 
-  // auto indexes = catalog->GetTableIndexes(table->name_);
+  auto indexes = catalog->GetTableIndexes(table->name_);
 
   auto txn_mgr = exec_ctx_->GetTransactionManager();
 
@@ -128,20 +128,14 @@ auto UpdateExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
       txn_mgr->UpdateUndoLink(rids[i], txn->AppendUndoLog(log));
       txn->AppendWriteSet(oid, rids[i]);
     }
-    table_ptr->UpdateTupleInPlace(new_meta, Tuple(std::move(new_values), &schema), rids[i]);
-    //  auto new_rid = table_ptr->InsertTuple(new_meta, new_data, lock_mgr, txn, oid);
-    //   if (new_rid != std::nullopt) [[likely]] {  // NOLINT
-    //     for (const auto &index : indexes) {
-    //       auto key_attr = index->index_->GetKeyAttrs();
-    //       index->index_->DeleteEntry(old_data.KeyFromTuple(schema, index->key_schema_, key_attr), old_rid, txn);
-    //       index->index_->InsertEntry(new_data.KeyFromTuple(schema, index->key_schema_, key_attr), *new_rid, txn);
-    //     }
-    //   } else {
-    //     for (const auto &index : indexes) {
-    //       index->index_->DeleteEntry(old_data.KeyFromTuple(schema, index->key_schema_, index->index_->GetKeyAttrs()),
-    //                                  old_rid, txn);
-    //     }
-    //   }
+    Tuple new_tuple(std::move(new_values), &schema);
+    table_ptr->UpdateTupleInPlace(new_meta, new_tuple, rids[i]);
+
+    for (const auto &index : indexes) {
+      auto key_attr = index->index_->GetKeyAttrs();
+      index->index_->DeleteEntry(data[i].KeyFromTuple(schema, index->key_schema_, key_attr), rids[i], txn);
+      index->index_->InsertEntry(new_tuple.KeyFromTuple(schema, index->key_schema_, key_attr), rids[i], txn);
+    }
   }
 
   *tuple = {std::vector<Value>{ValueFactory::GetIntegerValue(updated)}, &plan_->OutputSchema()};

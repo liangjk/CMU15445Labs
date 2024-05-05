@@ -67,7 +67,7 @@ auto DeleteExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
   }
   Tuple delete_tuple(std::move(delete_values), &schema);
 
-  // auto indexes = catalog->GetTableIndexes(table->name_);
+  auto indexes = catalog->GetTableIndexes(table->name_);
 
   auto txn_mgr = exec_ctx_->GetTransactionManager();
 
@@ -110,10 +110,10 @@ auto DeleteExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
       txn->AppendWriteSet(oid, rids[i]);
     }
     table_ptr->UpdateTupleInPlace(delete_meta, delete_tuple, rids[i]);
-    // for (const auto &index : indexes) {
-    //   index->index_->DeleteEntry(data[i].KeyFromTuple(schema, index->key_schema_, index->index_->GetKeyAttrs()),
-    //                              rids[i], txn);
-    // }
+    for (const auto &index : indexes) {
+      index->index_->DeleteEntry(data[i].KeyFromTuple(schema, index->key_schema_, index->index_->GetKeyAttrs()),
+                                 rids[i], txn);
+    }
   }
 
   *tuple = {std::vector<Value>{ValueFactory::GetIntegerValue(deleted)}, &plan_->OutputSchema()};

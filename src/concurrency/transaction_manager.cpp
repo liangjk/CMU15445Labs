@@ -105,6 +105,42 @@ void TransactionManager::Abort(Transaction *txn) {
   running_txns_.RemoveTxn(txn->read_ts_);
 }
 
-void TransactionManager::GarbageCollection() { UNIMPLEMENTED("not implemented"); }
+void TransactionManager::GarbageCollection() {
+  // std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
+  std::unordered_map<txn_id_t, std::shared_ptr<Transaction>> new_map;
+  for (const auto &pair : txn_map_) {
+    if (pair.second->GetTransactionState() < TransactionState::COMMITTED) {
+      new_map.insert(pair);
+    }
+  }
+  auto watermark = GetWatermark();
+  const auto tables = catalog_->GetTableNames();
+  for (const auto &table : tables) {
+    auto iter = catalog_->GetTable(table)->table_->MakeIterator();
+    while (!iter.IsEnd()) {
+      if (iter.GetTuple().first.ts_ <= watermark) {
+        ++iter;
+        continue;
+      }
+      auto link_opt = GetUndoLink(iter.GetRID());
+      if (link_opt.has_value()) {
+        auto link = *link_opt;
+        while (link.IsValid()) {
+          if (new_map.find(link.prev_txn_) == new_map.end()) {
+            new_map[link.prev_txn_] = txn_map_[link.prev_txn_];
+          }
+          auto log = GetUndoLogOptional(link);
+          BUSTUB_ASSERT(log.has_value(), "this entry still alive, should not be empty");
+          if (log->ts_ <= watermark) {
+            break;
+          }
+          link = log->prev_version_;
+        }
+      }
+      ++iter;
+    }
+  }
+  txn_map_ = std::move(new_map);
+}
 
 }  // namespace bustub

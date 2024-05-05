@@ -464,7 +464,7 @@ TEST(TxnExecutorTest, UpdateConflict) {  // NOLINT
   }
 }
 
-TEST(TxnExecutorTest, DISABLED_GarbageCollection) {  // NOLINT
+TEST(TxnExecutorTest, GarbageCollection) {  // NOLINT
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
   Execute(*bustub, "CREATE TABLE table1(a int, b int, c int)");
@@ -602,7 +602,7 @@ TEST(TxnExecutorTest, DISABLED_GarbageCollection) {  // NOLINT
   WithTxn(txn3, EnsureTxnGCed(*bustub, _var, txn3_id));
 }
 
-TEST(TxnExecutorTest, DISABLED_GarbageCollectionWithTainted) {  // NOLINT
+TEST(TxnExecutorTest, GarbageCollectionWithTainted) {  // NOLINT
   auto empty_table = IntResult{};
   auto bustub = std::make_unique<BustubInstance>();
   Execute(*bustub, "CREATE TABLE table1(a int, b int, c int)");
