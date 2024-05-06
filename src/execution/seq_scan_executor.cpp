@@ -45,38 +45,38 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   }
   const auto &filter = plan_->filter_predicate_;
   while (!iter_->IsEnd()) {
-    auto tuple_with_meta = iter_->GetTuple();
-    if (tuple_with_meta.first.ts_ == txn_->GetTransactionTempTs()) {
-      if (tuple_with_meta.first.is_deleted_) {
+    auto [meta, old_tuple, undo_link] = GetTupleAndUndoLink(txn_mgr_, table_info_->table_.get(), iter_->GetRID());
+    if (meta.ts_ == txn_->GetTransactionTempTs()) {
+      if (meta.is_deleted_) {
         ++*iter_;
         continue;
       }
       if (filter) {
-        auto value = filter->Evaluate(&tuple_with_meta.second, table_info_->schema_);
+        auto value = filter->Evaluate(&old_tuple, table_info_->schema_);
         if (value.IsNull() || !value.GetAs<bool>()) {
           ++*iter_;
           continue;
         }
       }
-      *tuple = tuple_with_meta.second;
+      *tuple = old_tuple;
       *rid = iter_->GetRID();
       ++*iter_;
       return true;
     }
     auto rts = txn_->GetReadTs();
-    if (tuple_with_meta.first.ts_ <= rts) {
-      if (tuple_with_meta.first.is_deleted_) {
+    if (meta.ts_ <= rts) {
+      if (meta.is_deleted_) {
         ++*iter_;
         continue;
       }
       if (filter) {
-        auto value = filter->Evaluate(&tuple_with_meta.second, table_info_->schema_);
+        auto value = filter->Evaluate(&old_tuple, table_info_->schema_);
         if (value.IsNull() || !value.GetAs<bool>()) {
           ++*iter_;
           continue;
         }
       }
-      *tuple = tuple_with_meta.second;
+      *tuple = old_tuple;
       *rid = iter_->GetRID();
       ++*iter_;
       return true;
@@ -84,26 +84,28 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     // Build undo log here
     std::vector<UndoLog> logs;
     bool found = false;
-    auto log_entry = txn_mgr_->GetUndoLogOptional(*txn_mgr_->GetUndoLink(iter_->GetRID()));
-    while (log_entry.has_value()) {
-      logs.emplace_back(*log_entry);
-      if (log_entry->ts_ <= rts) {
-        found = true;
-        break;
+    if (undo_link.has_value()) {
+      auto log_entry = txn_mgr_->GetUndoLogOptional(*undo_link);
+      while (log_entry.has_value()) {
+        logs.emplace_back(*log_entry);
+        if (log_entry->ts_ <= rts) {
+          found = true;
+          break;
+        }
+        log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
       }
-      log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
     }
     if (found) {
-      auto old_tuple = ReconstructTuple(&plan_->OutputSchema(), tuple_with_meta.second, tuple_with_meta.first, logs);
-      if (old_tuple.has_value()) {
+      auto rebuilt_tuple = ReconstructTuple(&plan_->OutputSchema(), old_tuple, meta, logs);
+      if (rebuilt_tuple.has_value()) {
         if (filter) {
-          auto value = filter->Evaluate(&old_tuple.value(), table_info_->schema_);
+          auto value = filter->Evaluate(&rebuilt_tuple.value(), table_info_->schema_);
           if (value.IsNull() || !value.GetAs<bool>()) {
             ++*iter_;
             continue;
           }
         }
-        *tuple = *old_tuple;
+        *tuple = *rebuilt_tuple;
         *rid = iter_->GetRID();
         ++*iter_;
         return true;

@@ -59,39 +59,40 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
                                  exec_ctx_->GetTransaction());
     BUSTUB_ASSERT(rids.size() <= 1, "duplicated index, not supported");
     if (!rids.empty()) {
-      auto tuple_with_meta = table_info_->table_->GetTuple(rids[0]);
-      if (tuple_with_meta.first.ts_ == txn_->GetTransactionTempTs()) {
-        if (!tuple_with_meta.first.is_deleted_) {
+      auto [meta, old_tuple, undo_link] = GetTupleAndUndoLink(txn_mgr_, table_info_->table_.get(), rids[0]);
+      if (meta.ts_ == txn_->GetTransactionTempTs()) {
+        if (!meta.is_deleted_) {
           *rid = rids[0];
-          *tuple = tuple_with_meta.second;
+          *tuple = old_tuple;
           return true;
         }
           continue;
       }
       auto rts = txn_->GetReadTs();
-      if (tuple_with_meta.first.ts_ <= rts) {
-        if (!tuple_with_meta.first.is_deleted_) {
+      if (meta.ts_ <= rts) {
+        if (!meta.is_deleted_) {
           *rid = rids[0];
-          *tuple = tuple_with_meta.second;
+          *tuple = old_tuple;
           return true;
         }
       } else {
         std::vector<UndoLog> logs;
         bool found = false;
-        auto log_entry = txn_mgr_->GetUndoLogOptional(*txn_mgr_->GetUndoLink(rids[0]));
-        while (log_entry.has_value()) {
-          logs.emplace_back(*log_entry);
-          if (log_entry->ts_ <= rts) {
-            found = true;
-            break;
+        if (undo_link.has_value()) {
+          auto log_entry = txn_mgr_->GetUndoLogOptional(*undo_link);
+          while (log_entry.has_value()) {
+            logs.emplace_back(*log_entry);
+            if (log_entry->ts_ <= rts) {
+              found = true;
+              break;
+            }
+            log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
           }
-          log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
         }
         if (found) {
-          auto old_tuple =
-              ReconstructTuple(&plan_->OutputSchema(), tuple_with_meta.second, tuple_with_meta.first, logs);
-          if (old_tuple.has_value()) {
-            *tuple = *old_tuple;
+          auto rebuilt_tuple = ReconstructTuple(&plan_->OutputSchema(), old_tuple, meta, logs);
+          if (rebuilt_tuple.has_value()) {
+            *tuple = *rebuilt_tuple;
             *rid = rids[0];
             return true;
           }
