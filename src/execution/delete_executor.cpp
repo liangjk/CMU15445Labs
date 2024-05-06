@@ -38,20 +38,17 @@ auto DeleteExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
 
   const auto &table_ptr = table->table_;
 
-  std::vector<Tuple> data;
   std::vector<RID> rids;
-  std::vector<TupleMeta> meta;
 
   Tuple delete_data;
   RID delete_rid;
 
   while (child_executor_->Next(&delete_data, &delete_rid)) {
-    meta.emplace_back(table_ptr->GetTupleMeta(delete_rid));
-    if (meta.back().ts_ > txn->GetReadTs() && meta.back().ts_ != txn->GetTransactionTempTs()) {
+    auto meta = table_ptr->GetTupleMeta(delete_rid);
+    if (meta.ts_ > txn->GetReadTs() && meta.ts_ != txn->GetTransactionTempTs()) {
       txn->SetTainted();
-      throw(ExecutionException("write-write conflict"));
+      throw(ExecutionException("write-write conflict in delete pre-check"));
     }
-    data.emplace_back(delete_data);
     rids.emplace_back(delete_rid);
   }
 
@@ -67,52 +64,64 @@ auto DeleteExecutor::Next(Tuple *tuple, [[maybe_unused]] RID *rid) -> bool {
   }
   Tuple delete_tuple(std::move(delete_values), &schema);
 
-  auto indexes = catalog->GetTableIndexes(table->name_);
-
   auto txn_mgr = exec_ctx_->GetTransactionManager();
 
-  size_t deleted = data.size();
+  size_t deleted = rids.size();
   for (size_t i = 0; i < deleted; ++i) {
-    if (meta[i].ts_ == txn->GetTransactionTempTs()) {
-      auto link = txn_mgr->GetUndoLink(rids[i]);
-      if (link.has_value()) {
-        BUSTUB_ASSERT(link->prev_txn_ == txn->GetTransactionId(), "tuple must be changed by the same txn");
-        auto log = txn->GetUndoLog(link->prev_log_idx_);
+    auto [meta, old_tuple, undo_link] = GetTupleAndUndoLink(txn_mgr, table_ptr.get(), rids[i]);
+    if (meta.ts_ > txn->GetReadTs() && meta.ts_ != txn->GetTransactionTempTs()) {
+      txn->SetTainted();
+      throw(ExecutionException("write-write conflict in delete executing, tainted txn"));
+    }
+    if (meta.ts_ == txn->GetTransactionTempTs()) {
+      if (undo_link.has_value()) {
+        BUSTUB_ASSERT(undo_link->prev_txn_ == txn->GetTransactionId(), "tuple must be changed by the same txn");
+        auto log = txn->GetUndoLog(undo_link->prev_log_idx_);
 
         std::vector<uint32_t> partial_cols;
         partial_cols.reserve(col_cnt);
         for (size_t j = 0; j < col_cnt; ++j) {
           if (log.modified_fields_[j]) {
             partial_cols.push_back(j);
-          } else {
-            log.modified_fields_[j] = true;
           }
         }
         auto partial_schema = Schema::CopySchema(&schema, partial_cols);
 
         std::vector<Value> log_values;
         log_values.reserve(col_cnt);
+        size_t partial_idx = 0;
         for (size_t j = 0; j < col_cnt; ++j) {
-          log_values.emplace_back(data[i].GetValue(&schema, j));
-        }
-        for (size_t j = 0; j < partial_cols.size(); ++j) {
-          log_values[partial_cols[j]] = log.tuple_.GetValue(&partial_schema, j);
+          if (log.modified_fields_[j]) {
+            log_values.emplace_back(log.tuple_.GetValue(&partial_schema, partial_idx++));
+          } else {
+            log_values.emplace_back(old_tuple.GetValue(&schema, j));
+            log.modified_fields_[j] = true;
+          }
         }
 
         log.tuple_ = {std::move(log_values), &schema};
 
-        txn->ModifyUndoLog(link->prev_log_idx_, log);
+        txn->ModifyUndoLog(undo_link->prev_log_idx_, log);
+      }
+      if (!table_ptr->UpdateTupleInPlace(delete_meta, delete_tuple, rids[i],
+                                         [meta_ref(meta)](const TupleMeta &meta_para, const Tuple &tuple_para,
+                                                          RID rid_para) { return meta_para == meta_ref; })) {
+        txn->SetTainted();
+        throw(ExecutionException("write-write conflict in delete executing, tainted txn"));
       }
     } else {
-      auto link = txn_mgr->GetUndoLink(rids[i]);
-      UndoLog log{false, std::vector<bool>(col_cnt, true), data[i], meta[i].ts_, link.has_value() ? *link : UndoLink{}};
+      UndoLog log{false, std::vector<bool>(col_cnt, true), old_tuple, meta.ts_,
+                  undo_link.has_value() ? *undo_link : UndoLink{}};
+      auto page_write_guard = table_ptr->AcquireTablePageWriteLock(rids[i]);
+      auto page = page_write_guard.AsMut<TablePage>();
+      auto base_meta = page->GetTupleMeta(rids[i]);
+      if (base_meta != meta) {
+        txn->SetTainted();
+        throw(ExecutionException("write-write conflict in delete executing, tainted txn"));
+      }
+      table_ptr->UpdateTupleInPlaceWithLockAcquired(delete_meta, delete_tuple, rids[i], page);
       txn_mgr->UpdateUndoLink(rids[i], txn->AppendUndoLog(log));
       txn->AppendWriteSet(oid, rids[i]);
-    }
-    table_ptr->UpdateTupleInPlace(delete_meta, delete_tuple, rids[i]);
-    for (const auto &index : indexes) {
-      index->index_->DeleteEntry(data[i].KeyFromTuple(schema, index->key_schema_, index->index_->GetKeyAttrs()),
-                                 rids[i], txn);
     }
   }
 

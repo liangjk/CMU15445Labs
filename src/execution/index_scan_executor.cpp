@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "execution/executors/index_scan_executor.h"
+#include "execution/execution_common.h"
 #include "execution/expressions/constant_value_expression.h"
 
 namespace bustub {
@@ -18,6 +19,8 @@ IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanP
   auto catalog = exec_ctx_->GetCatalog();
   table_info_ = catalog->GetTable(plan_->table_oid_);
   index_info_ = catalog->GetIndex(plan_->GetIndexOid());
+  txn_ = exec_ctx_->GetTransaction();
+  txn_mgr_ = exec_ctx_->GetTransactionManager();
 }
 
 void IndexScanExecutor::Init() {
@@ -54,12 +57,45 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     std::vector<RID> rids;
     index_info_->index_->ScanKey({std::vector<Value>{const_expr->val_}, &index_info_->key_schema_}, &rids,
                                  exec_ctx_->GetTransaction());
+    BUSTUB_ASSERT(rids.size() <= 1, "duplicated index, not supported");
     if (!rids.empty()) {
       auto tuple_with_meta = table_info_->table_->GetTuple(rids[0]);
-      if (!tuple_with_meta.first.is_deleted_) {
-        *rid = rids[0];
-        *tuple = tuple_with_meta.second;
-        return true;
+      if (tuple_with_meta.first.ts_ == txn_->GetTransactionTempTs()) {
+        if (!tuple_with_meta.first.is_deleted_) {
+          *rid = rids[0];
+          *tuple = tuple_with_meta.second;
+          return true;
+        }
+          continue;
+      }
+      auto rts = txn_->GetReadTs();
+      if (tuple_with_meta.first.ts_ <= rts) {
+        if (!tuple_with_meta.first.is_deleted_) {
+          *rid = rids[0];
+          *tuple = tuple_with_meta.second;
+          return true;
+        }
+      } else {
+        std::vector<UndoLog> logs;
+        bool found = false;
+        auto log_entry = txn_mgr_->GetUndoLogOptional(*txn_mgr_->GetUndoLink(rids[0]));
+        while (log_entry.has_value()) {
+          logs.emplace_back(*log_entry);
+          if (log_entry->ts_ <= rts) {
+            found = true;
+            break;
+          }
+          log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
+        }
+        if (found) {
+          auto old_tuple =
+              ReconstructTuple(&plan_->OutputSchema(), tuple_with_meta.second, tuple_with_meta.first, logs);
+          if (old_tuple.has_value()) {
+            *tuple = *old_tuple;
+            *rid = rids[0];
+            return true;
+          }
+        }
       }
     }
   }
