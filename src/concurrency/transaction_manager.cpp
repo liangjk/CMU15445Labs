@@ -475,9 +475,20 @@ void TransactionManager::GarbageCollection() {
       ++iter;
     }
   }
+  for (auto &txn : commit_txns_) {
+    if (txn != nullptr) {
+      if (new_map.find(txn->GetTransactionId()) == new_map.end()) {
+        txn = nullptr;
+      }
+    }
+  }
   txn_map_ = std::move(new_map);
 }
 
-void TransactionManager::ClearTxn(Transaction *txn) const { txn->undo_logs_.clear(); }
+void TransactionManager::ClearTxn(Transaction *txn) const {
+  if (txn != nullptr) {
+    txn->undo_logs_.clear();
+  }
+}
 
 }  // namespace bustub
