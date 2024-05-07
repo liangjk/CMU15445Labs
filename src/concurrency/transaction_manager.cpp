@@ -99,10 +99,88 @@ void TransactionManager::Abort(Transaction *txn) {
   }
 
   // TODO(fall2023): Implement the abort logic!
+  for (const auto &pair : txn->write_set_) {
+    auto table_info = catalog_->GetTable(pair.first);
+    const auto &table_heap = table_info->table_;
+    const auto &schema = table_info->schema_;
+    auto col_cnt = schema.GetColumnCount();
+    std::optional<Tuple> empty_tuple{std::nullopt};
+    TupleMeta empty_meta{0, true};
+    for (const auto &rid : pair.second) {
+      auto [meta, old_tuple, undo_link] = GetTupleAndUndoLink(this, table_heap.get(), rid);
+      BUSTUB_ASSERT(meta.ts_ == txn->txn_id_, "tuple not with correct timestamp");
+      if (undo_link.has_value()) {
+        BUSTUB_ASSERT(undo_link->prev_txn_ == txn->txn_id_, "tuple was not modified by this txn");
+        auto log = txn->GetUndoLog(undo_link->prev_log_idx_);
+        BUSTUB_ASSERT(log.prev_version_.prev_txn_ != txn->txn_id_, "txn has more than one undo log entry");
+
+        if (log.is_deleted_) {
+          if (!empty_tuple.has_value()) {
+            std::vector<Value> empty_values;
+            empty_values.reserve(col_cnt);
+            for (size_t i = 0; i < col_cnt; ++i) {
+              empty_values.emplace_back(ValueFactory::GetNullValueByType(schema.GetColumn(i).GetType()));
+            }
+            empty_tuple.emplace(std::move(empty_values), &schema);
+          }
+          TupleMeta new_meta{log.ts_, true};
+          auto page_write_guard = table_heap->AcquireTablePageWriteLock(rid);
+          auto page = page_write_guard.AsMut<TablePage>();
+          table_heap->UpdateTupleInPlaceWithLockAcquired(new_meta, *empty_tuple, rid, page);
+          if (log.prev_version_.IsValid()) {
+            UpdateUndoLink(rid, log.prev_version_);
+          } else {
+            UpdateUndoLink(rid, std::nullopt);
+          }
+        } else {
+          std::vector<uint32_t> partial_cols;
+          partial_cols.reserve(col_cnt);
+          for (size_t i = 0; i < col_cnt; ++i) {
+            if (log.modified_fields_[i]) {
+              partial_cols.push_back(i);
+            }
+          }
+          auto partial_schema = Schema::CopySchema(&schema, partial_cols);
+
+          std::vector<Value> new_values;
+          new_values.reserve(col_cnt);
+          size_t partial_idx = 0;
+          for (size_t i = 0; i < col_cnt; ++i) {
+            if (log.modified_fields_[i]) {
+              new_values.emplace_back(log.tuple_.GetValue(&partial_schema, partial_idx++));
+            } else {
+              new_values.emplace_back(old_tuple.GetValue(&schema, i));
+            }
+          }
+          TupleMeta new_meta{log.ts_, false};
+
+          auto page_write_guard = table_heap->AcquireTablePageWriteLock(rid);
+          auto page = page_write_guard.AsMut<TablePage>();
+          table_heap->UpdateTupleInPlaceWithLockAcquired(new_meta, Tuple(std::move(new_values), &schema), rid, page);
+          if (log.prev_version_.IsValid()) {
+            UpdateUndoLink(rid, log.prev_version_);
+          } else {
+            UpdateUndoLink(rid, std::nullopt);
+          }
+        }
+      } else {
+        if (!empty_tuple.has_value()) {
+          std::vector<Value> empty_values;
+          empty_values.reserve(col_cnt);
+          for (size_t i = 0; i < col_cnt; ++i) {
+            empty_values.emplace_back(ValueFactory::GetNullValueByType(schema.GetColumn(i).GetType()));
+          }
+          empty_tuple.emplace(std::move(empty_values), &schema);
+        }
+        table_heap->UpdateTupleInPlace(empty_meta, *empty_tuple, rid);
+      }
+    }
+  }
 
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
   txn->state_ = TransactionState::ABORTED;
   running_txns_.RemoveTxn(txn->read_ts_);
+  // txn_map_.erase(txn->txn_id_);
 }
 
 void TransactionManager::GarbageCollection() {
