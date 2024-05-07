@@ -49,25 +49,211 @@ auto TransactionManager::Begin(IsolationLevel isolation_level) -> Transaction * 
   return txn_ref;
 }
 
-auto TransactionManager::VerifyTxn(Transaction *txn) -> bool { return true; }
+auto TransactionManager::VerifyTxn(Transaction *txn) -> bool {
+  if (txn->write_set_.empty()) {
+    return true;
+  }
+  auto vfcmt = txn->GetReadTs();
+  while (vfcmt < last_commit_ts_) {
+    std::vector<const std::unordered_map<table_oid_t, std::unordered_set<RID>> *> to_verify;
+    while (vfcmt < last_commit_ts_) {
+      const auto &write_set = commit_txns_[vfcmt++]->GetWriteSets();
+      if (!write_set.empty()) {
+        to_verify.push_back(&write_set);
+      }
+    }
+    if (!to_verify.empty()) {
+      commit_mutex_.unlock();
+      if (!DoVerify(txn, to_verify)) {
+        return false;
+      }
+      commit_mutex_.lock();
+    }
+  }
+  return true;
+}
+
+auto TransactionManager::DoVerify(
+    Transaction *txn, const std::vector<const std::unordered_map<table_oid_t, std::unordered_set<RID>> *> &to_verify)
+    -> bool {
+  std::unordered_map<table_oid_t, std::unordered_set<RID>> verified;
+  for (auto write_set : to_verify) {
+    for (const auto &pair : *write_set) {
+      auto pdit = txn->scan_predicates_.find(pair.first);
+      if (pdit != txn->scan_predicates_.end()) {
+        auto table_info = catalog_->GetTable(pair.first);
+        const auto &schema = table_info->schema_;
+        auto vfit = verified.find(pair.first);
+        if (vfit == verified.end()) {
+          for (const auto &rid : pair.second) {
+            auto [meta, now_tuple, undo_link] = GetTupleAndUndoLink(this, table_info->table_.get(), rid);
+            if (meta.ts_ < TXN_START_ID) {
+              if (!meta.is_deleted_) {
+                for (const auto &expr : pdit->second) {
+                  auto val = expr->Evaluate(&now_tuple, schema);
+                  if (val.IsNull() || val.GetAs<bool>()) {
+                    return false;
+                  }
+                }
+              }
+              std::vector<UndoLog> logs;
+              bool found = false;
+              if (undo_link.has_value()) {
+                auto log_entry = GetUndoLogOptional(*undo_link);
+                while (log_entry.has_value()) {
+                  logs.emplace_back(*log_entry);
+                  if (log_entry->ts_ <= txn->GetReadTs()) {
+                    found = true;
+                    break;
+                  }
+                  log_entry = GetUndoLogOptional(log_entry->prev_version_);
+                }
+                if (found) {
+                  auto old_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
+                  if (old_tuple.has_value()) {
+                    for (const auto &expr : pdit->second) {
+                      auto val = expr->Evaluate(&old_tuple.value(), schema);
+                      if (val.IsNull() || val.GetAs<bool>()) {
+                        return false;
+                      }
+                    }
+                  }
+                }
+              }
+            } else {
+              std::vector<UndoLog> logs;
+              auto log_entry = GetUndoLogOptional(*undo_link);
+              logs.emplace_back(*log_entry);
+              auto rebuilt_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
+              if (rebuilt_tuple.has_value()) {
+                for (const auto &expr : pdit->second) {
+                  auto val = expr->Evaluate(&rebuilt_tuple.value(), schema);
+                  if (val.IsNull() || val.GetAs<bool>()) {
+                    return false;
+                  }
+                }
+              }
+              bool found = false;
+              log_entry = GetUndoLogOptional(log_entry->prev_version_);
+              while (log_entry.has_value()) {
+                logs.emplace_back(*log_entry);
+                if (log_entry->ts_ <= txn->GetReadTs()) {
+                  found = true;
+                  break;
+                }
+                log_entry = GetUndoLogOptional(log_entry->prev_version_);
+              }
+              if (found) {
+                rebuilt_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
+                if (rebuilt_tuple.has_value()) {
+                  for (const auto &expr : pdit->second) {
+                    auto val = expr->Evaluate(&rebuilt_tuple.value(), schema);
+                    if (val.IsNull() || val.GetAs<bool>()) {
+                      return false;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          verified[pair.first].insert(pair.second.begin(), pair.second.end());
+        } else {
+          for (const auto &rid : pair.second) {
+            if (vfit->second.find(rid) != vfit->second.end()) {
+              continue;
+            }
+            auto [meta, now_tuple, undo_link] = GetTupleAndUndoLink(this, table_info->table_.get(), rid);
+            if (meta.ts_ < TXN_START_ID) {
+              if (!meta.is_deleted_) {
+                for (const auto &expr : pdit->second) {
+                  auto val = expr->Evaluate(&now_tuple, schema);
+                  if (val.IsNull() || val.GetAs<bool>()) {
+                    return false;
+                  }
+                }
+              }
+              std::vector<UndoLog> logs;
+              bool found = false;
+              if (undo_link.has_value()) {
+                auto log_entry = GetUndoLogOptional(*undo_link);
+                while (log_entry.has_value()) {
+                  logs.emplace_back(*log_entry);
+                  if (log_entry->ts_ <= txn->GetReadTs()) {
+                    found = true;
+                    break;
+                  }
+                  log_entry = GetUndoLogOptional(log_entry->prev_version_);
+                }
+                if (found) {
+                  auto old_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
+                  if (old_tuple.has_value()) {
+                    for (const auto &expr : pdit->second) {
+                      auto val = expr->Evaluate(&old_tuple.value(), schema);
+                      if (val.IsNull() || val.GetAs<bool>()) {
+                        return false;
+                      }
+                    }
+                  }
+                }
+              }
+            } else {
+              std::vector<UndoLog> logs;
+              auto log_entry = GetUndoLogOptional(*undo_link);
+              logs.emplace_back(*log_entry);
+              auto rebuilt_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
+              if (rebuilt_tuple.has_value()) {
+                for (const auto &expr : pdit->second) {
+                  auto val = expr->Evaluate(&rebuilt_tuple.value(), schema);
+                  if (val.IsNull() || val.GetAs<bool>()) {
+                    return false;
+                  }
+                }
+              }
+              bool found = false;
+              log_entry = GetUndoLogOptional(log_entry->prev_version_);
+              while (log_entry.has_value()) {
+                logs.emplace_back(*log_entry);
+                if (log_entry->ts_ <= txn->GetReadTs()) {
+                  found = true;
+                  break;
+                }
+                log_entry = GetUndoLogOptional(log_entry->prev_version_);
+              }
+              if (found) {
+                rebuilt_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
+                if (rebuilt_tuple.has_value()) {
+                  for (const auto &expr : pdit->second) {
+                    auto val = expr->Evaluate(&rebuilt_tuple.value(), schema);
+                    if (val.IsNull() || val.GetAs<bool>()) {
+                      return false;
+                    }
+                  }
+                }
+              }
+            }
+            vfit->second.insert(rid);
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
 
 auto TransactionManager::Commit(Transaction *txn) -> bool {
-  std::unique_lock<std::mutex> commit_lck(commit_mutex_);
-
-  // TODO(fall2023): acquire commit ts!
-  auto commit_ts = last_commit_ts_ + 1;
-
   if (txn->state_ != TransactionState::RUNNING) {
     throw Exception("txn not in running state");
   }
 
+  commit_mutex_.lock();
   if (txn->GetIsolationLevel() == IsolationLevel::SERIALIZABLE) {
     if (!VerifyTxn(txn)) {
-      commit_lck.unlock();
       Abort(txn);
       return false;
     }
   }
+  // TODO(fall2023): acquire commit ts!
+  auto commit_ts = last_commit_ts_ + 1;
 
   // TODO(fall2023): Implement the commit logic!
   const auto &write_set = txn->GetWriteSets();
@@ -80,16 +266,83 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
     }
   }
 
+  // auto &write_set = txn->write_set_;
+  // for (auto &pair : write_set) {
+  //   auto table_info = catalog_->GetTable(pair.first);
+  //   const auto &table = table_info->table_;
+  //   std::vector<RID> unchanged;
+  //   for (const auto &rid : pair.second) {
+  //     auto [meta, now_tuple, undo_link] = GetTupleAndUndoLink(this, table.get(), rid);
+  //     if (undo_link.has_value()) {
+  //       bool unchange = true;
+  //       auto log = GetUndoLog(*undo_link);
+  //       if (log.is_deleted_) {
+  //         if (!meta.is_deleted_) {
+  //           unchange = false;
+  //         }
+  //       } else {
+  //         const auto &schema = table_info->schema_;
+  //         auto col_cnt = schema.GetColumnCount();
+  //         std::vector<uint32_t> partial_cols;
+  //         partial_cols.reserve(col_cnt);
+  //         for (size_t i = 0; i < col_cnt; ++i) {
+  //           if (log.modified_fields_[i]) {
+  //             partial_cols.push_back(i);
+  //           }
+  //         }
+  //         auto partial_schema = Schema::CopySchema(&schema, partial_cols);
+  //         for (size_t i = 0; i < partial_cols.size(); ++i) {
+  //           if (!log.tuple_.GetValue(&partial_schema, i)
+  //                    .CompareExactlyEquals(now_tuple.GetValue(&schema, partial_cols[i]))) {
+  //             unchange = false;
+  //             break;
+  //           }
+  //         }
+  //       }
+  //       if (unchange) {
+  //         unchanged.emplace_back(rid);
+  //         meta.ts_ = log.ts_;
+  //         auto page_write_guard = table->AcquireTablePageWriteLock(rid);
+  //         auto page = page_write_guard.AsMut<TablePage>();
+  //         page->UpdateTupleMeta(meta, rid);
+  //         if (log.prev_version_.IsValid()) {
+  //           UpdateUndoLink(rid, log.prev_version_);
+  //         } else {
+  //           UpdateUndoLink(rid, std::nullopt);
+  //         }
+  //       } else {
+  //         meta.ts_ = commit_ts;
+  //         table->UpdateTupleMeta(meta, rid);
+  //       }
+  //     } else {
+  //       if (meta.is_deleted_) {
+  //         unchanged.emplace_back(rid);
+  //       }
+  //       meta.ts_ = commit_ts;
+  //       table->UpdateTupleMeta(meta, rid);
+  //     }
+  //   }
+  //   for (const auto &rid : unchanged) {
+  //     pair.second.erase(rid);
+  //   }
+  // }
+
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
 
   // TODO(fall2023): set commit timestamp + update last committed timestamp here.
   txn->commit_ts_.store(commit_ts);
   last_commit_ts_.store(commit_ts);
+  commit_txns_.push_back(txn);
 
   txn->state_ = TransactionState::COMMITTED;
   running_txns_.UpdateCommitTs(txn->commit_ts_);
   running_txns_.RemoveTxn(txn->read_ts_);
+  auto wm = GetWatermark();
+  while (cleared_ < wm) {
+    ClearTxn(commit_txns_[cleared_++]);
+  }
 
+  commit_mutex_.unlock();
   return true;
 }
 
@@ -180,7 +433,11 @@ void TransactionManager::Abort(Transaction *txn) {
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
   txn->state_ = TransactionState::ABORTED;
   running_txns_.RemoveTxn(txn->read_ts_);
-  // txn_map_.erase(txn->txn_id_);
+  aborted_txns_.push(txn);
+  if (aborted_txns_.size() > ABORT_WAIT_THRESHOLD) {
+    ClearTxn(aborted_txns_.front());
+    aborted_txns_.pop();
+  }
 }
 
 void TransactionManager::GarbageCollection() {
@@ -220,5 +477,7 @@ void TransactionManager::GarbageCollection() {
   }
   txn_map_ = std::move(new_map);
 }
+
+void TransactionManager::ClearTxn(Transaction *txn) const { txn->undo_logs_.clear(); }
 
 }  // namespace bustub

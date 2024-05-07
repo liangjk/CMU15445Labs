@@ -21,6 +21,7 @@ IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanP
   index_info_ = catalog->GetIndex(plan_->GetIndexOid());
   txn_ = exec_ctx_->GetTransaction();
   txn_mgr_ = exec_ctx_->GetTransactionManager();
+  txn_->AppendScanPredicate(plan_->table_oid_, plan_->filter_predicate_);
 }
 
 void IndexScanExecutor::Init() {

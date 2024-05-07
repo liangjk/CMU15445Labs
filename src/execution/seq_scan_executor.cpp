@@ -12,7 +12,9 @@
 
 #include "execution/executors/seq_scan_executor.h"
 #include "execution/execution_common.h"
+#include "execution/expressions/constant_value_expression.h"
 #include "optimizer/optimizer_internal.h"
+#include "type/value_factory.h"
 
 namespace bustub {
 
@@ -31,6 +33,11 @@ SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNod
   table_info_ = catalog->GetTable(oid);
   txn_ = exec_ctx_->GetTransaction();
   txn_mgr_ = exec_ctx_->GetTransactionManager();
+  if (filter) {
+    txn_->AppendScanPredicate(oid, filter);
+  } else {
+    txn_->AppendScanPredicate(oid, std::make_shared<ConstantValueExpression>(ValueFactory::GetBooleanValue(true)));
+  }
 }
 
 void SeqScanExecutor::Init() {

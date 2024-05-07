@@ -17,10 +17,12 @@
 #include <memory>
 #include <mutex>  // NOLINT
 #include <optional>
+#include <queue>
 #include <shared_mutex>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "catalog/schema.h"
 #include "common/config.h"
@@ -121,7 +123,15 @@ class TransactionManager {
  private:
   /** @brief Verify if a txn satisfies serializability. We will not test this function and you can change / remove it as
    * you want. */
+  // Called with commit lock held, if return true with lock held, if return false release lock
   auto VerifyTxn(Transaction *txn) -> bool;
+  auto DoVerify(Transaction *txn,
+                const std::vector<const std::unordered_map<table_oid_t, std::unordered_set<RID>> *> &to_verify) -> bool;
+  void ClearTxn(Transaction *txn) const;
+  std::vector<Transaction *> commit_txns_;
+  int64_t cleared_{0};
+  std::queue<Transaction *> aborted_txns_;
+  static const size_t ABORT_WAIT_THRESHOLD = 3;
 };
 
 /**
