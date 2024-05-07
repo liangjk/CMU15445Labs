@@ -67,7 +67,7 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
           *tuple = old_tuple;
           return true;
         }
-          continue;
+        continue;
       }
       auto rts = txn_->GetReadTs();
       if (meta.ts_ <= rts) {
