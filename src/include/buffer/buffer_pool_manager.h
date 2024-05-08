@@ -224,6 +224,7 @@ class BufferPoolManager {
   std::condition_variable wb_cv_;
   int wb_count_{0};
   static const int WB_SIZE = 8;
+  std::unordered_map<page_id_t, Page *> in_wb_;
 
   auto WriteBack(Page *page) -> std::thread *;
 };
