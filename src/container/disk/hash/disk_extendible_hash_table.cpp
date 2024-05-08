@@ -90,12 +90,12 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
   auto hash = Hash(key);
   {
     auto page_guard = bpm_->FetchPageRead(header_page_id_);
-    auto header_page = page_guard.As<ExtendibleHTableHeaderPage>();
+    auto header_page = page_guard.template As<ExtendibleHTableHeaderPage>();
     dir_pid = header_page->GetDirectoryPageIdHash(hash);
   }
   if (dir_pid != INVALID_PAGE_ID) {
     auto dir_page_guard = bpm_->FetchPageRead(dir_pid);
-    auto dir_page = dir_page_guard.As<ExtendibleHTableDirectoryPage>();
+    auto dir_page = dir_page_guard.template As<ExtendibleHTableDirectoryPage>();
     auto bucket_pid = dir_page->GetBucketPageIdHash(hash);
     auto bucket_page_guard = bpm_->FetchPageRead(bucket_pid);
     auto bucket_page = bucket_page_guard.template As<ExtendibleHTableBucketPage<K, V, KC>>();

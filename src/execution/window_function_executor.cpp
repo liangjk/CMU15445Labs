@@ -157,5 +157,6 @@ auto WindowFunctionExecutor::CalcAndInsert(const TupleToSort &tuple, std::unorde
       }
       return ValueFactory::GetIntegerValue(rv->current_);
   }
+  BUSTUB_ASSERT(false, "should not arrive here");
 }
 }  // namespace bustub
