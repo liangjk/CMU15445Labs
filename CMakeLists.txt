@@ -250,6 +250,11 @@ add_custom_target(fix-clang-tidy-diff
 # hardcode some files to check here for each project.
 # ##########################################################
 set(P0_FILES
+        "src/include/primer/trie_answer.h"
+        "src/include/primer/trie_store.h"
+        "src/include/primer/trie.h"
+        "src/primer/trie_store.cpp"
+        "src/primer/trie.cpp"
         "src/planner/plan_func_call.cpp"
         "src/include/execution/expressions/string_expression.h"
         "src/include/primer/orset.h"
