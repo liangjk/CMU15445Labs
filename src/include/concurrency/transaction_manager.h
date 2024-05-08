@@ -17,13 +17,13 @@
 #include <memory>
 #include <mutex>  // NOLINT
 #include <optional>
-#include <queue>
 #include <shared_mutex>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "catalog/catalog.h"
 #include "catalog/schema.h"
 #include "common/config.h"
 #include "concurrency/transaction.h"
@@ -130,23 +130,25 @@ class TransactionManager {
   void ClearTxn(Transaction *txn) const;
   std::vector<Transaction *> commit_txns_;
   int64_t cleared_{0};
-  std::queue<Transaction *> aborted_txns_;
-  static const size_t ABORT_WAIT_THRESHOLD = 3;
 };
 
-/**
- * @brief Update the tuple and its undo link in the table heap atomically.
- */
-auto UpdateTupleAndUndoLink(
-    TransactionManager *txn_mgr, RID rid, std::optional<UndoLink> undo_link, TableHeap *table_heap, Transaction *txn,
-    const TupleMeta &meta, const Tuple &tuple,
-    std::function<bool(const TupleMeta &meta, const Tuple &tuple, RID rid, std::optional<UndoLink>)> &&check = nullptr)
-    -> bool;
+// /**
+//  * @brief Update the tuple and its undo link in the table heap atomically.
+//  */
+// auto UpdateTupleAndUndoLink(
+//     TransactionManager *txn_mgr, RID rid, std::optional<UndoLink> undo_link, TableHeap *table_heap, Transaction *txn,
+//     const TupleMeta &meta, const Tuple &tuple,
+//     std::function<bool(const TupleMeta &meta, const Tuple &tuple, RID rid, std::optional<UndoLink>)> &&check =
+//     nullptr)
+//     -> bool;
 
 /**
  * @brief Get the tuple and its undo link in the table heap atomically.
  */
 auto GetTupleAndUndoLink(TransactionManager *txn_mgr, TableHeap *table_heap, RID rid)
+    -> std::tuple<TupleMeta, Tuple, std::optional<UndoLink>>;
+
+auto GetStableTupleAndUndoLink(TransactionManager *txn_mgr, TableInfo *table_info, RID rid)
     -> std::tuple<TupleMeta, Tuple, std::optional<UndoLink>>;
 
 }  // namespace bustub

@@ -52,24 +52,25 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   }
   const auto &filter = plan_->filter_predicate_;
   while (!iter_->IsEnd()) {
-    auto [meta, old_tuple, undo_link] = GetTupleAndUndoLink(txn_mgr_, table_info_->table_.get(), iter_->GetRID());
-    if (meta.ts_ == txn_->GetTransactionTempTs()) {
-      if (meta.is_deleted_) {
+    auto current_tuple = iter_->GetTuple();
+    if (current_tuple.first.ts_ == txn_->GetTransactionTempTs()) {
+      if (current_tuple.first.is_deleted_) {
         ++*iter_;
         continue;
       }
       if (filter) {
-        auto value = filter->Evaluate(&old_tuple, table_info_->schema_);
+        auto value = filter->Evaluate(&current_tuple.second, table_info_->schema_);
         if (value.IsNull() || !value.GetAs<bool>()) {
           ++*iter_;
           continue;
         }
       }
-      *tuple = old_tuple;
+      *tuple = current_tuple.second;
       *rid = iter_->GetRID();
       ++*iter_;
       return true;
     }
+    auto [meta, old_tuple, undo_link] = GetStableTupleAndUndoLink(txn_mgr_, table_info_, iter_->GetRID());
     auto rts = txn_->GetReadTs();
     if (meta.ts_ <= rts) {
       if (meta.is_deleted_) {
@@ -91,15 +92,18 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     // Build undo log here
     std::vector<UndoLog> logs;
     bool found = false;
-    if (undo_link.has_value()) {
-      auto log_entry = txn_mgr_->GetUndoLogOptional(*undo_link);
-      while (log_entry.has_value()) {
+    if (undo_link.has_value() && undo_link->IsValid()) {
+      for (auto log_entry = txn_mgr_->GetUndoLogOptional(*undo_link);;) {
         logs.emplace_back(*log_entry);
         if (log_entry->ts_ <= rts) {
           found = true;
           break;
         }
-        log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
+        if (log_entry->prev_version_.IsValid()) {
+          log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
+        } else {
+          break;
+        }
       }
     }
     if (found) {

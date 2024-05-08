@@ -60,15 +60,16 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
                                  exec_ctx_->GetTransaction());
     BUSTUB_ASSERT(rids.size() <= 1, "duplicated index, not supported");
     if (!rids.empty()) {
-      auto [meta, old_tuple, undo_link] = GetTupleAndUndoLink(txn_mgr_, table_info_->table_.get(), rids[0]);
-      if (meta.ts_ == txn_->GetTransactionTempTs()) {
-        if (!meta.is_deleted_) {
+      auto current_tuple = table_info_->table_->GetTuple(rids[0]);
+      if (current_tuple.first.ts_ == txn_->GetTransactionTempTs()) {
+        if (!current_tuple.first.is_deleted_) {
           *rid = rids[0];
-          *tuple = old_tuple;
+          *tuple = current_tuple.second;
           return true;
         }
         continue;
       }
+      auto [meta, old_tuple, undo_link] = GetStableTupleAndUndoLink(txn_mgr_, table_info_, rids[0]);
       auto rts = txn_->GetReadTs();
       if (meta.ts_ <= rts) {
         if (!meta.is_deleted_) {
@@ -79,15 +80,18 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
       } else {
         std::vector<UndoLog> logs;
         bool found = false;
-        if (undo_link.has_value()) {
-          auto log_entry = txn_mgr_->GetUndoLogOptional(*undo_link);
-          while (log_entry.has_value()) {
+        if (undo_link.has_value() && undo_link->IsValid()) {
+          for (auto log_entry = txn_mgr_->GetUndoLogOptional(*undo_link);;) {
             logs.emplace_back(*log_entry);
             if (log_entry->ts_ <= rts) {
               found = true;
               break;
             }
-            log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
+            if (log_entry->prev_version_.IsValid()) {
+              log_entry = txn_mgr_->GetUndoLogOptional(log_entry->prev_version_);
+            } else {
+              break;
+            }
           }
         }
         if (found) {

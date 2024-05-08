@@ -86,55 +86,19 @@ auto TransactionManager::DoVerify(
         auto vfit = verified.find(pair.first);
         if (vfit == verified.end()) {
           for (const auto &rid : pair.second) {
-            auto [meta, now_tuple, undo_link] = GetTupleAndUndoLink(this, table_info->table_.get(), rid);
-            if (meta.ts_ < TXN_START_ID) {
-              if (!meta.is_deleted_) {
-                for (const auto &expr : pdit->second) {
-                  auto val = expr->Evaluate(&now_tuple, schema);
-                  if (val.IsNull() || val.GetAs<bool>()) {
-                    return false;
-                  }
+            auto [meta, now_tuple, undo_link] = GetStableTupleAndUndoLink(this, table_info, rid);
+            if (!meta.is_deleted_) {
+              for (const auto &expr : pdit->second) {
+                auto val = expr->Evaluate(&now_tuple, schema);
+                if (val.IsNull() || val.GetAs<bool>()) {
+                  return false;
                 }
               }
-              std::vector<UndoLog> logs;
-              bool found = false;
-              if (undo_link.has_value()) {
-                auto log_entry = GetUndoLogOptional(*undo_link);
-                while (log_entry.has_value()) {
-                  logs.emplace_back(*log_entry);
-                  if (log_entry->ts_ <= txn->GetReadTs()) {
-                    found = true;
-                    break;
-                  }
-                  log_entry = GetUndoLogOptional(log_entry->prev_version_);
-                }
-                if (found) {
-                  auto old_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
-                  if (old_tuple.has_value()) {
-                    for (const auto &expr : pdit->second) {
-                      auto val = expr->Evaluate(&old_tuple.value(), schema);
-                      if (val.IsNull() || val.GetAs<bool>()) {
-                        return false;
-                      }
-                    }
-                  }
-                }
-              }
-            } else {
-              std::vector<UndoLog> logs;
+            }
+            std::vector<UndoLog> logs;
+            bool found = false;
+            if (undo_link.has_value()) {
               auto log_entry = GetUndoLogOptional(*undo_link);
-              logs.emplace_back(*log_entry);
-              auto rebuilt_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
-              if (rebuilt_tuple.has_value()) {
-                for (const auto &expr : pdit->second) {
-                  auto val = expr->Evaluate(&rebuilt_tuple.value(), schema);
-                  if (val.IsNull() || val.GetAs<bool>()) {
-                    return false;
-                  }
-                }
-              }
-              bool found = false;
-              log_entry = GetUndoLogOptional(log_entry->prev_version_);
               while (log_entry.has_value()) {
                 logs.emplace_back(*log_entry);
                 if (log_entry->ts_ <= txn->GetReadTs()) {
@@ -144,10 +108,10 @@ auto TransactionManager::DoVerify(
                 log_entry = GetUndoLogOptional(log_entry->prev_version_);
               }
               if (found) {
-                rebuilt_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
-                if (rebuilt_tuple.has_value()) {
+                auto old_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
+                if (old_tuple.has_value()) {
                   for (const auto &expr : pdit->second) {
-                    auto val = expr->Evaluate(&rebuilt_tuple.value(), schema);
+                    auto val = expr->Evaluate(&old_tuple.value(), schema);
                     if (val.IsNull() || val.GetAs<bool>()) {
                       return false;
                     }
@@ -162,55 +126,19 @@ auto TransactionManager::DoVerify(
             if (vfit->second.find(rid) != vfit->second.end()) {
               continue;
             }
-            auto [meta, now_tuple, undo_link] = GetTupleAndUndoLink(this, table_info->table_.get(), rid);
-            if (meta.ts_ < TXN_START_ID) {
-              if (!meta.is_deleted_) {
-                for (const auto &expr : pdit->second) {
-                  auto val = expr->Evaluate(&now_tuple, schema);
-                  if (val.IsNull() || val.GetAs<bool>()) {
-                    return false;
-                  }
+            auto [meta, now_tuple, undo_link] = GetStableTupleAndUndoLink(this, table_info, rid);
+            if (!meta.is_deleted_) {
+              for (const auto &expr : pdit->second) {
+                auto val = expr->Evaluate(&now_tuple, schema);
+                if (val.IsNull() || val.GetAs<bool>()) {
+                  return false;
                 }
               }
-              std::vector<UndoLog> logs;
-              bool found = false;
-              if (undo_link.has_value()) {
-                auto log_entry = GetUndoLogOptional(*undo_link);
-                while (log_entry.has_value()) {
-                  logs.emplace_back(*log_entry);
-                  if (log_entry->ts_ <= txn->GetReadTs()) {
-                    found = true;
-                    break;
-                  }
-                  log_entry = GetUndoLogOptional(log_entry->prev_version_);
-                }
-                if (found) {
-                  auto old_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
-                  if (old_tuple.has_value()) {
-                    for (const auto &expr : pdit->second) {
-                      auto val = expr->Evaluate(&old_tuple.value(), schema);
-                      if (val.IsNull() || val.GetAs<bool>()) {
-                        return false;
-                      }
-                    }
-                  }
-                }
-              }
-            } else {
-              std::vector<UndoLog> logs;
+            }
+            std::vector<UndoLog> logs;
+            bool found = false;
+            if (undo_link.has_value()) {
               auto log_entry = GetUndoLogOptional(*undo_link);
-              logs.emplace_back(*log_entry);
-              auto rebuilt_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
-              if (rebuilt_tuple.has_value()) {
-                for (const auto &expr : pdit->second) {
-                  auto val = expr->Evaluate(&rebuilt_tuple.value(), schema);
-                  if (val.IsNull() || val.GetAs<bool>()) {
-                    return false;
-                  }
-                }
-              }
-              bool found = false;
-              log_entry = GetUndoLogOptional(log_entry->prev_version_);
               while (log_entry.has_value()) {
                 logs.emplace_back(*log_entry);
                 if (log_entry->ts_ <= txn->GetReadTs()) {
@@ -220,10 +148,10 @@ auto TransactionManager::DoVerify(
                 log_entry = GetUndoLogOptional(log_entry->prev_version_);
               }
               if (found) {
-                rebuilt_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
-                if (rebuilt_tuple.has_value()) {
+                auto old_tuple = ReconstructTuple(&schema, now_tuple, meta, logs);
+                if (old_tuple.has_value()) {
                   for (const auto &expr : pdit->second) {
-                    auto val = expr->Evaluate(&rebuilt_tuple.value(), schema);
+                    auto val = expr->Evaluate(&old_tuple.value(), schema);
                     if (val.IsNull() || val.GetAs<bool>()) {
                       return false;
                     }
@@ -360,8 +288,9 @@ void TransactionManager::Abort(Transaction *txn) {
     std::optional<Tuple> empty_tuple{std::nullopt};
     TupleMeta empty_meta{0, true};
     for (const auto &rid : pair.second) {
-      auto [meta, old_tuple, undo_link] = GetTupleAndUndoLink(this, table_heap.get(), rid);
+      auto [meta, old_tuple] = table_heap->GetTuple(rid);
       BUSTUB_ASSERT(meta.ts_ == txn->txn_id_, "tuple not with correct timestamp");
+      auto undo_link = GetUndoLink(rid);
       if (undo_link.has_value()) {
         BUSTUB_ASSERT(undo_link->prev_txn_ == txn->txn_id_, "tuple was not modified by this txn");
         auto log = txn->GetUndoLog(undo_link->prev_log_idx_);
@@ -433,11 +362,7 @@ void TransactionManager::Abort(Transaction *txn) {
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
   txn->state_ = TransactionState::ABORTED;
   running_txns_.RemoveTxn(txn->read_ts_);
-  aborted_txns_.push(txn);
-  if (aborted_txns_.size() > ABORT_WAIT_THRESHOLD) {
-    ClearTxn(aborted_txns_.front());
-    aborted_txns_.pop();
-  }
+  ClearTxn(txn);
 }
 
 void TransactionManager::GarbageCollection() {
@@ -489,6 +414,53 @@ void TransactionManager::ClearTxn(Transaction *txn) const {
   if (txn != nullptr) {
     txn->undo_logs_.clear();
   }
+}
+
+auto GetStableTupleAndUndoLink(TransactionManager *txn_mgr, TableInfo *table_info, RID rid)
+    -> std::tuple<TupleMeta, Tuple, std::optional<UndoLink>> {
+  auto page_read_guard = table_info->table_->AcquireTablePageReadLock(rid);
+  auto page = page_read_guard.As<TablePage>();
+  auto [meta, tuple] = page->GetTuple(rid);
+
+  auto undo_link = txn_mgr->GetUndoLink(rid);
+  if (meta.ts_ >= TXN_START_ID) {
+    auto log = txn_mgr->GetUndoLogOptional(*undo_link);
+    page_read_guard.Drop();
+    if (log.has_value()) {
+      TupleMeta new_meta{log->ts_, log->is_deleted_};
+      const auto &schema = table_info->schema_;
+      auto col_cnt = schema.GetColumnCount();
+      std::vector<Value> new_values;
+      new_values.reserve(col_cnt);
+      if (log->is_deleted_) {
+        for (size_t i = 0; i < col_cnt; ++i) {
+          new_values.emplace_back(ValueFactory::GetNullValueByType(schema.GetColumn(i).GetType()));
+        }
+      } else {
+        std::vector<uint32_t> partial_cols;
+        partial_cols.reserve(col_cnt);
+        for (size_t i = 0; i < col_cnt; ++i) {
+          if (log->modified_fields_[i]) {
+            partial_cols.push_back(i);
+          }
+        }
+        auto partial_schema = Schema::CopySchema(&schema, partial_cols);
+
+        size_t partial_idx = 0;
+        for (size_t i = 0; i < col_cnt; ++i) {
+          if (log->modified_fields_[i]) {
+            new_values.emplace_back(log->tuple_.GetValue(&partial_schema, partial_idx++));
+          } else {
+            new_values.emplace_back(tuple.GetValue(&schema, i));
+          }
+        }
+      }
+
+      return std::make_tuple(new_meta, Tuple(std::move(new_values), &schema), log->prev_version_);
+    }
+    return std::make_tuple(TupleMeta{0, true}, Tuple(), std::nullopt);
+  }
+  return std::make_tuple(meta, tuple, undo_link);
 }
 
 }  // namespace bustub
